@@ -1,0 +1,30 @@
+name: Ingest 13F
+
+on:
+  schedule:
+    # Daily; new 13Fs cluster around quarterly 45-day deadlines.
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ingest-13f
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ingester
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ingester/go.mod
+          cache-dependency-path: ingester/go.sum
+      - name: Ingest 13F holdings for curated institutions
+        run: go run ./cmd/ingester backfill13f

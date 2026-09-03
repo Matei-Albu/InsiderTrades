@@ -1,0 +1,30 @@
+name: Refresh Prices
+
+on:
+  schedule:
+    # Weekdays after US market close (4pm ET = 20:00/21:00 UTC).
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: prices
+  cancel-in-progress: false
+
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ingester
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ingester/go.mod
+          cache-dependency-path: ingester/go.sum
+      - name: Fetch EOD prices for active tickers
+        run: go run ./cmd/ingester prices
