@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 const links = [
   { href: "/", label: "Feed" },
   { href: "/clusters", label: "Cluster Buys" },
+  { href: "/congress", label: "Congress" },
   { href: "/institutions", label: "Institutions" },
   { href: "/watchlist", label: "Watchlist" },
 ] as const;

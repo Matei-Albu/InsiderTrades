@@ -3,10 +3,12 @@ import { fetchYahooPrices } from "@/lib/prices/yahoo";
 import type {
   ClusterBuy,
   Company,
+  CongressTrade,
   Filing13F,
   HoldingChange,
   InsiderTrade,
   Institution,
+  Politician,
   PriceBar,
 } from "@/lib/types";
 
@@ -210,4 +212,40 @@ export async function getInstitutionalOwners(ticker: string): Promise<
     }
   }
   return [...latest.values()].sort((a, b) => b.value - a.value);
+}
+
+export type CongressFilter = {
+  side: "buys" | "sells" | "all";
+  politician?: string; // slug
+};
+
+export async function getPoliticians(): Promise<Politician[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("politicians")
+    .select("*")
+    .eq("active", true)
+    .order("name");
+  if (error) throw new Error(`politicians: ${error.message}`);
+  return data ?? [];
+}
+
+export async function getCongressTrades(
+  filter: CongressFilter,
+  limit = 100
+): Promise<CongressTrade[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("congress_trade_feed")
+    .select("*")
+    .order("filed_at", { ascending: false })
+    .limit(limit);
+
+  if (filter.side === "buys") query = query.eq("transaction_type", "purchase");
+  if (filter.side === "sells") query = query.eq("transaction_type", "sale");
+  if (filter.politician) query = query.eq("politician_slug", filter.politician);
+
+  const { data, error } = await query;
+  if (error) throw new Error(`congress_trade_feed: ${error.message}`);
+  return data ?? [];
 }

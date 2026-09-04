@@ -86,3 +86,43 @@ export type WatchlistItem = {
   ticker: string;
   created_at: string;
 };
+
+export type CongressTrade = {
+  id: number;
+  doc_id: string;
+  politician_id: string;
+  politician_name: string;
+  politician_slug: string;
+  chamber: string;
+  party: string | null;
+  state: string | null;
+  district: string | null;
+  committees: string | null;
+  ticker: string | null;
+  asset_name: string;
+  transaction_type: string;
+  transaction_date: string | null;
+  notification_date: string | null;
+  amount_range: string | null;
+  amount_min: number | null;
+  amount_max: number | null;
+  owner: string | null;
+  asset_type: string | null;
+  description: string | null;
+  filed_at: string;
+  source_url: string;
+  year: number;
+};
+
+export type Politician = {
+  id: string;
+  name: string;
+  slug: string;
+  chamber: string;
+  party: string | null;
+  state: string | null;
+  district: string | null;
+  last_name: string;
+  committees: string | null;
+  active: boolean;
+};

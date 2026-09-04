@@ -4,11 +4,13 @@ package store
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/mateialbu/insidertrades/ingester/internal/congress"
 	"github.com/mateialbu/insidertrades/ingester/internal/edgar"
 )
 
@@ -254,6 +256,95 @@ func (s *Store) SetState(ctx context.Context, key, value string) error {
 		on conflict (key) do update set value = excluded.value, updated_at = now()`,
 		key, value)
 	return err
+}
+
+// ---------------------------------------------------------------------------
+// Congress (House STOCK Act PTRs)
+// ---------------------------------------------------------------------------
+
+type Politician struct {
+	ID        string
+	Name      string
+	Slug      string
+	LastName  string
+	District  string
+	Chamber   string
+}
+
+func (s *Store) Politicians(ctx context.Context) ([]Politician, error) {
+	rows, err := s.pool.Query(ctx, `
+		select id, name, slug, last_name, coalesce(district, ''), chamber
+		from politicians
+		where active = true and chamber = 'house'
+		order by name`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[Politician])
+}
+
+func (s *Store) HasCongressFiling(ctx context.Context, docID string) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx,
+		`select exists (select 1 from filings_congress where doc_id = $1)`,
+		docID).Scan(&exists)
+	return exists, err
+}
+
+// SaveCongressFiling inserts a PTR filing and its trades in one transaction.
+func (s *Store) SaveCongressFiling(ctx context.Context, politicianID string, f congress.Filing, trades []congress.Trade) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `
+		insert into filings_congress (doc_id, politician_id, year, filed_at, source_url)
+		values ($1, $2, $3, $4, $5)
+		on conflict (doc_id) do nothing`,
+		f.DocID, politicianID, f.Year, f.FiledAt, f.SourceURL)
+	if err != nil {
+		return fmt.Errorf("insert congress filing: %w", err)
+	}
+
+	for _, t := range trades {
+		tdate := parseFlexibleDate(t.TransactionDate)
+		ndate := parseFlexibleDate(t.NotificationDate)
+		_, err = tx.Exec(ctx, `
+			insert into congress_trades (
+				doc_id, politician_id, ticker, asset_name, transaction_type,
+				transaction_date, notification_date, amount_range, amount_min, amount_max,
+				owner, asset_type, description
+			) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+			f.DocID, politicianID, t.Ticker, t.AssetName, t.TransactionType,
+			tdate, ndate, nullIfEmpty(t.AmountRange), t.AmountMin, t.AmountMax,
+			nullIfEmpty(t.Owner), t.AssetType, t.Description)
+		if err != nil {
+			return fmt.Errorf("insert congress trade: %w", err)
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+func nullIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func parseFlexibleDate(s string) *time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	for _, layout := range []string{"1/2/2006", "01/02/2006", "2006-01-02"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return &t
+		}
+	}
+	return nil
 }
 
 // PendingAlert is a watchlist hit that has not been emailed yet.

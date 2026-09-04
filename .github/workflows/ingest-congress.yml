@@ -1,0 +1,35 @@
+name: Ingest Congress
+
+on:
+  schedule:
+    # Twice daily — House PTR indexes update irregularly.
+    - cron: "0 14,22 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ingest-congress
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ingester
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ingester/go.mod
+          cache-dependency-path: ingester/go.sum
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PDF parser deps
+        run: pip install -r scripts/requirements.txt
+      - name: Ingest House STOCK Act PTRs
+        run: go run ./cmd/ingester congress

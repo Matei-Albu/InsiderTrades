@@ -4,6 +4,7 @@
 //	backfill13f  fetch 13F holdings for all curated institutions
 //	prices       fetch EOD prices from Yahoo Finance for active tickers
 //	alerts       email watchlist alerts for newly ingested filings
+//	congress     fetch House STOCK Act PTRs for curated politicians
 package main
 
 import (
@@ -11,9 +12,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/mateialbu/insidertrades/ingester/internal/alerts"
+	"github.com/mateialbu/insidertrades/ingester/internal/congress"
 	"github.com/mateialbu/insidertrades/ingester/internal/edgar"
 	"github.com/mateialbu/insidertrades/ingester/internal/prices"
 	"github.com/mateialbu/insidertrades/ingester/internal/store"
@@ -21,7 +24,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: ingester <form4|backfill13f|prices|alerts>")
+		fmt.Fprintln(os.Stderr, "usage: ingester <form4|backfill13f|prices|alerts|congress>")
 		os.Exit(2)
 	}
 	ctx := context.Background()
@@ -41,6 +44,8 @@ func main() {
 		err = runPrices(ctx, db)
 	case "alerts":
 		err = runAlerts(ctx, db)
+	case "congress":
+		err = runCongress(ctx, db)
 	default:
 		log.Fatalf("unknown subcommand %q", os.Args[1])
 	}
@@ -224,4 +229,83 @@ func runAlerts(ctx context.Context, db *store.Store) error {
 	}
 	log.Printf("alerts done: %d digests sent", sent)
 	return db.SetState(ctx, "alerts_last_run", runStart.Format(time.RFC3339))
+}
+
+// runCongress ingests House STOCK Act PTRs for curated politicians.
+func runCongress(ctx context.Context, db *store.Store) error {
+	politicians, err := db.Politicians(ctx)
+	if err != nil {
+		return err
+	}
+	if len(politicians) == 0 {
+		log.Printf("no active house politicians seeded")
+		return nil
+	}
+
+	client := congress.NewClient()
+	now := time.Now().UTC()
+	years := []int{now.Year()}
+	if now.Month() <= 2 {
+		years = append(years, now.Year()-1)
+	} else {
+		// Always also scan prior year for late filings.
+		years = append(years, now.Year()-1)
+	}
+
+	tmpDir, err := os.MkdirTemp("", "congress-ptr-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	var ingested, skipped, empty, failed int
+	for _, year := range years {
+		filings, err := client.FetchPTRIndex(year)
+		if err != nil {
+			log.Printf("WARN index %d: %v", year, err)
+			continue
+		}
+		log.Printf("year %d: %d PTR filings in index", year, len(filings))
+
+		for _, pol := range politicians {
+			for _, f := range filings {
+				if !congress.Matches(f, pol.LastName, pol.District) {
+					continue
+				}
+				exists, err := db.HasCongressFiling(ctx, f.DocID)
+				if err != nil {
+					return err
+				}
+				if exists {
+					skipped++
+					continue
+				}
+
+				pdfPath := filepath.Join(tmpDir, f.DocID+".pdf")
+				if err := client.DownloadPDF(f.SourceURL, pdfPath); err != nil {
+					log.Printf("WARN download %s %s: %v", pol.Slug, f.DocID, err)
+					failed++
+					continue
+				}
+				trades, err := congress.ParsePDF(pdfPath)
+				if err != nil {
+					log.Printf("WARN parse %s %s: %v", pol.Slug, f.DocID, err)
+					failed++
+					continue
+				}
+				if len(trades) == 0 {
+					// Scanned/image PDFs often yield zero rows — still record the filing.
+					empty++
+				}
+				if err := db.SaveCongressFiling(ctx, pol.ID, f, trades); err != nil {
+					return fmt.Errorf("save %s: %w", f.DocID, err)
+				}
+				ingested++
+				log.Printf("  %s %s (%s): %d trades", pol.Name, f.DocID, f.FiledAt.Format("2006-01-02"), len(trades))
+			}
+		}
+	}
+	log.Printf("congress done: %d filings ingested, %d skipped, %d empty parses, %d failed",
+		ingested, skipped, empty, failed)
+	return nil
 }
