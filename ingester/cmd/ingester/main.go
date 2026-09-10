@@ -88,7 +88,9 @@ func runForm4(ctx context.Context, db *store.Store) error {
 			filedAt = time.Now()
 		}
 		if err := db.SaveForm4(ctx, e.AccessionNo, filedAt, e.IndexURL, f); err != nil {
-			return fmt.Errorf("save %s: %w", e.AccessionNo, err)
+			log.Printf("WARN save %s: %v", e.AccessionNo, err)
+			failed++
+			continue
 		}
 		ingested++
 	}

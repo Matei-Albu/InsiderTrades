@@ -232,7 +232,7 @@ func ParseForm4(body []byte) (*Form4, error) {
 		IsDirector:        owner.Relationship.IsDirector.Bool(),
 		IsOfficer:         owner.Relationship.IsOfficer.Bool(),
 		IsTenPercentOwner: owner.Relationship.IsTenPercentOwner.Bool(),
-		PeriodOfReport:    strings.TrimSpace(doc.PeriodOfReport),
+		PeriodOfReport:    normalizeDate(doc.PeriodOfReport),
 	}
 
 	for _, t := range doc.NonDerivative.Transactions {
@@ -247,7 +247,7 @@ func ParseForm4(body []byte) (*Form4, error) {
 func toTransaction(t xmlTransaction, derivative bool) Form4Transaction {
 	return Form4Transaction{
 		SecurityTitle:    strings.TrimSpace(t.SecurityTitle.Value),
-		Date:             strings.TrimSpace(t.TransactionDate.Value),
+		Date:             normalizeDate(t.TransactionDate.Value),
 		Code:             strings.TrimSpace(t.Coding.Code),
 		Shares:           parseFloat(t.Amounts.Shares.Value),
 		PricePerShare:    parseFloat(t.Amounts.PricePerShare.Value),

@@ -1,5 +1,9 @@
 import Link from "next/link";
 import TradesTable from "@/components/TradesTable";
+import ResultsLimit, {
+  DEFAULT_RESULT_LIMIT,
+  parseResultLimit,
+} from "@/components/ResultsLimit";
 import { getClusterTickers, getTrades, type FeedFilter } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -17,10 +21,11 @@ const minValues = [
   { key: 1_000_000, label: "$1M+" },
 ] as const;
 
-function filterHref(side: string, min: number) {
+function filterHref(side: string, min: number, limit: number) {
   const params = new URLSearchParams();
   if (side !== "buys") params.set("side", side);
   if (min > 0) params.set("min", String(min));
+  if (limit !== DEFAULT_RESULT_LIMIT) params.set("limit", String(limit));
   const qs = params.toString();
   return qs ? `/?${qs}` : "/";
 }
@@ -29,13 +34,16 @@ export default async function FeedPage({
   searchParams,
 }: PageProps<"/">) {
   const params = await searchParams;
-  const side = (["buys", "sells", "all"].includes(String(params.side))
-    ? params.side
+  const sideRaw = Array.isArray(params.side) ? params.side[0] : params.side;
+  const side = (["buys", "sells", "all"].includes(String(sideRaw))
+    ? sideRaw
     : "buys") as FeedFilter["side"];
-  const minValue = Number(params.min) || 0;
+  const minRaw = Array.isArray(params.min) ? params.min[0] : params.min;
+  const minValue = Number(minRaw) || 0;
+  const limit = parseResultLimit(params.limit);
 
   const [trades, clusterTickers] = await Promise.all([
-    getTrades({ side, minValue }),
+    getTrades({ side, minValue }, limit),
     getClusterTickers(),
   ]);
 
@@ -53,7 +61,8 @@ export default async function FeedPage({
           {sides.map((s) => (
             <Link
               key={s.key}
-              href={filterHref(s.key, minValue)}
+              href={filterHref(s.key, minValue, limit)}
+              scroll={false}
               className={`rounded-md px-3 py-1.5 transition-colors ${
                 side === s.key
                   ? "bg-surface-2 font-medium"
@@ -68,7 +77,8 @@ export default async function FeedPage({
           {minValues.map((m) => (
             <Link
               key={m.key}
-              href={filterHref(side, m.key)}
+              href={filterHref(side, m.key, limit)}
+              scroll={false}
               className={`rounded-md px-3 py-1.5 transition-colors ${
                 minValue === m.key
                   ? "bg-surface-2 font-medium"
@@ -82,6 +92,11 @@ export default async function FeedPage({
       </div>
 
       <TradesTable trades={trades} clusterTickers={clusterTickers} />
+      <ResultsLimit
+        current={limit}
+        shown={trades.length}
+        buildHref={(n) => filterHref(side, minValue, n)}
+      />
     </div>
   );
 }

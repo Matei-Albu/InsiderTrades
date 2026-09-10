@@ -1,6 +1,10 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import CongressTradesTable from "@/components/CongressTradesTable";
+import ResultsLimit, {
+  DEFAULT_RESULT_LIMIT,
+  parseResultLimit,
+} from "@/components/ResultsLimit";
 import {
   getCongressTrades,
   getPoliticians,
@@ -17,10 +21,11 @@ const sides = [
   { key: "sells", label: "Sells" },
 ] as const;
 
-function filterHref(side: string, politician: string) {
+function filterHref(side: string, politician: string, limit: number) {
   const params = new URLSearchParams();
   if (side !== "all") params.set("side", side);
   if (politician) params.set("member", politician);
+  if (limit !== DEFAULT_RESULT_LIMIT) params.set("limit", String(limit));
   const qs = params.toString();
   return qs ? `/congress?${qs}` : "/congress";
 }
@@ -29,13 +34,16 @@ export default async function CongressPage({
   searchParams,
 }: PageProps<"/congress">) {
   const params = await searchParams;
-  const side = (["buys", "sells", "all"].includes(String(params.side))
-    ? params.side
+  const sideRaw = Array.isArray(params.side) ? params.side[0] : params.side;
+  const side = (["buys", "sells", "all"].includes(String(sideRaw))
+    ? sideRaw
     : "all") as CongressFilter["side"];
-  const politician = typeof params.member === "string" ? params.member : "";
+  const memberRaw = Array.isArray(params.member) ? params.member[0] : params.member;
+  const politician = typeof memberRaw === "string" ? memberRaw : "";
+  const limit = parseResultLimit(params.limit);
 
   const [trades, politicians] = await Promise.all([
-    getCongressTrades({ side, politician: politician || undefined }),
+    getCongressTrades({ side, politician: politician || undefined }, limit),
     getPoliticians(),
   ]);
 
@@ -55,7 +63,8 @@ export default async function CongressPage({
           {sides.map((s) => (
             <Link
               key={s.key}
-              href={filterHref(s.key, politician)}
+              href={filterHref(s.key, politician, limit)}
+              scroll={false}
               className={`rounded-md px-3 py-1.5 transition-colors ${
                 side === s.key
                   ? "bg-surface-2 font-medium"
@@ -70,7 +79,8 @@ export default async function CongressPage({
 
       <div className="flex flex-wrap gap-2">
         <Link
-          href={filterHref(side, "")}
+          href={filterHref(side, "", limit)}
+          scroll={false}
           className={`rounded-full border px-3 py-1 text-xs transition-colors ${
             !politician
               ? "border-foreground bg-foreground text-background"
@@ -82,7 +92,8 @@ export default async function CongressPage({
         {politicians.map((p) => (
           <Link
             key={p.id}
-            href={filterHref(side, p.slug)}
+            href={filterHref(side, p.slug, limit)}
+            scroll={false}
             className={`rounded-full border px-3 py-1 text-xs transition-colors ${
               politician === p.slug
                 ? "border-foreground bg-foreground text-background"
@@ -95,6 +106,11 @@ export default async function CongressPage({
       </div>
 
       <CongressTradesTable trades={trades} />
+      <ResultsLimit
+        current={limit}
+        shown={trades.length}
+        buildHref={(n) => filterHref(side, politician, n)}
+      />
     </div>
   );
 }

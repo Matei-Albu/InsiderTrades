@@ -1,6 +1,9 @@
 package edgar
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 const sampleForm4XML = `<?xml version="1.0"?>
 <ownershipDocument>
@@ -150,6 +153,41 @@ func TestParseForm4Feed(t *testing.T) {
 	}
 	if e.Updated.IsZero() {
 		t.Error("Updated not parsed")
+	}
+}
+
+func TestNormalizeDate(t *testing.T) {
+	cases := map[string]string{
+		"2026-09-02":                 "2026-09-02",
+		"2026-09-02-05:00":           "2026-09-02",
+		"2026-09-02T14:58:12-04:00":  "2026-09-02",
+		" 2026-08-27 ":               "2026-08-27",
+		"":                           "",
+		"not-a-date":                 "",
+	}
+	for in, want := range cases {
+		if got := normalizeDate(in); got != want {
+			t.Errorf("normalizeDate(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestParseForm4TimezoneDateQuirk(t *testing.T) {
+	xml := strings.ReplaceAll(sampleForm4XML,
+		"<periodOfReport>2026-08-28</periodOfReport>",
+		"<periodOfReport>2026-08-28-05:00</periodOfReport>")
+	xml = strings.ReplaceAll(xml,
+		"<transactionDate><value>2026-08-27</value></transactionDate>",
+		"<transactionDate><value>2026-08-27-05:00</value></transactionDate>")
+	f, err := ParseForm4([]byte(xml))
+	if err != nil {
+		t.Fatalf("ParseForm4: %v", err)
+	}
+	if f.PeriodOfReport != "2026-08-28" {
+		t.Errorf("PeriodOfReport = %q", f.PeriodOfReport)
+	}
+	if f.Transactions[0].Date != "2026-08-27" {
+		t.Errorf("tx date = %q", f.Transactions[0].Date)
 	}
 }
 

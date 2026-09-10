@@ -48,6 +48,26 @@ func parseFloat(s string) float64 {
 	return v
 }
 
+// normalizeDate coerces Form 4 date quirks to YYYY-MM-DD.
+// Some filers emit values like "2026-09-02-05:00" (date + TZ offset, no time).
+func normalizeDate(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	// Already a clean calendar date.
+	if len(s) >= 10 && s[4] == '-' && s[7] == '-' {
+		ymd := s[:10]
+		if _, err := strconv.Atoi(strings.ReplaceAll(ymd, "-", "")); err == nil {
+			// Reject garbage like "2026-09-0X"
+			if ymd[0] >= '0' && ymd[0] <= '9' {
+				return ymd
+			}
+		}
+	}
+	return ""
+}
+
 // pickOwnershipXML picks the ownership document from a filing's index.json.
 // Filing directories contain the raw XML plus XSL-rendered copies; we want the raw one.
 func pickOwnershipXML(indexJSON []byte) (string, error) {
