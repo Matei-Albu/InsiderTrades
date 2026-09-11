@@ -31,8 +31,12 @@ jobs:
       - name: Ingest new Form 4 filings
         run: go run ./cmd/ingester form4
       - name: Send watchlist alerts
-        if: ${{ secrets.RESEND_API_KEY != '' }}
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
-        run: go run ./cmd/ingester alerts
+        run: |
+          if [ -z "$RESEND_API_KEY" ]; then
+            echo "Skipping alerts (RESEND_API_KEY not set)"
+            exit 0
+          fi
+          go run ./cmd/ingester alerts
