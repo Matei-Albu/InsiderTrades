@@ -9,6 +9,32 @@ export function formatMoney(value: number | null | undefined): string {
   return `$${value.toFixed(0)}`;
 }
 
+export function formatMarketCap(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  const abs = Math.abs(value);
+  if (abs >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
+  return formatMoney(value);
+}
+
+export function formatRatio(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return value.toFixed(2);
+}
+
+export function formatPercent(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  // Yahoo dividendYield is often already a fraction (0.005 → 0.50%).
+  const pct = Math.abs(value) <= 1 ? value * 100 : value;
+  return `${pct.toFixed(2)}%`;
+}
+
+export function formatCompactNumber(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return value.toLocaleString("en-US", { maximumFractionDigits: 0 });
+}
+
 export function formatShares(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   const abs = Math.abs(value);

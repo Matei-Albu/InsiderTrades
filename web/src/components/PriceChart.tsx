@@ -21,7 +21,8 @@ export type ChartMarker = {
 };
 
 function toTime(date: string): UTCTimestamp {
-  return (Date.parse(date + "T00:00:00Z") / 1000) as UTCTimestamp;
+  const iso = date.includes("T") ? date : `${date}T00:00:00Z`;
+  return (Date.parse(iso) / 1000) as UTCTimestamp;
 }
 
 /** One dot per day per side — no labels on the chart. */

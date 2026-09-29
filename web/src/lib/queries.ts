@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
-import { fetchYahooPrices } from "@/lib/prices/yahoo";
+import {
+  fetchYahooPrices,
+  fetchYahooQuote,
+  filterBarsToRange,
+  type ChartRangeKey,
+  type CompanyQuote,
+} from "@/lib/prices/yahoo";
 import type {
   ClusterBuy,
   Company,
@@ -156,29 +162,47 @@ export async function resolveCompany(ticker: string): Promise<Company | null> {
   return null;
 }
 
-export async function getPrices(ticker: string): Promise<PriceBar[]> {
+export async function getPrices(
+  ticker: string,
+  range: ChartRangeKey = "all"
+): Promise<PriceBar[]> {
   const normalized = ticker.toUpperCase();
 
-  // Always try Yahoo for a full 5-year window; DB may only have a recent slice
-  // from the ingester batch job.
+  // Intraday must come from Yahoo; fall back to last daily bar(s) if empty.
+  if (range === "1d") {
+    const intraday = await fetchYahooPrices(normalized, "1d");
+    if (intraday.length > 0) return intraday;
+    const daily = await loadDailyHistory(normalized);
+    return daily.slice(-5); // last few sessions if 5m feed is empty
+  }
+
+  const daily = await loadDailyHistory(normalized);
+  return filterBarsToRange(daily, range);
+}
+
+async function loadDailyHistory(ticker: string): Promise<PriceBar[]> {
   const [yahoo, db] = await Promise.all([
-    fetchYahooPrices(normalized),
+    fetchYahooPrices(ticker, "all"),
     (async () => {
       const supabase = await createClient();
       const { data, error } = await supabase
         .from("prices")
         .select("*")
-        .eq("ticker", normalized)
+        .eq("ticker", ticker)
         .order("date", { ascending: true })
         .limit(1500);
       if (error) throw new Error(`prices: ${error.message}`);
-      return data ?? [];
+      return (data ?? []) as PriceBar[];
     })(),
   ]);
 
   // Prefer whichever source has more history.
   if (yahoo.length >= db.length) return yahoo;
   return db;
+}
+
+export async function getCompanyQuote(ticker: string): Promise<CompanyQuote> {
+  return fetchYahooQuote(ticker);
 }
 
 /** Institutions holding a ticker in their most recent filed quarter. */
