@@ -1,11 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import {
-  fetchYahooPrices,
-  fetchYahooQuote,
-  filterBarsToRange,
-  type ChartRangeKey,
-  type CompanyQuote,
-} from "@/lib/prices/yahoo";
+import { fetchYahooPrices } from "@/lib/prices/yahoo";
+import { filterBarsToRange, type ChartRangeKey } from "@/lib/prices/range";
 import type {
   ClusterBuy,
   Company,
@@ -181,28 +176,21 @@ export async function getPrices(
 }
 
 async function loadDailyHistory(ticker: string): Promise<PriceBar[]> {
-  const [yahoo, db] = await Promise.all([
-    fetchYahooPrices(ticker, "all"),
-    (async () => {
-      const supabase = await createClient();
-      const { data, error } = await supabase
-        .from("prices")
-        .select("*")
-        .eq("ticker", ticker)
-        .order("date", { ascending: true })
-        .limit(1500);
-      if (error) throw new Error(`prices: ${error.message}`);
-      return (data ?? []) as PriceBar[];
-    })(),
-  ]);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("prices")
+    .select("*")
+    .eq("ticker", ticker)
+    .order("date", { ascending: true })
+    .limit(1500);
+  if (error) throw new Error(`prices: ${error.message}`);
+  const db = (data ?? []) as PriceBar[];
 
-  // Prefer whichever source has more history.
-  if (yahoo.length >= db.length) return yahoo;
-  return db;
-}
+  // Use DB when we already have bars — avoids waiting on Yahoo from Vercel
+  // (often slow / rate-limited and was freezing stock pages ~30s).
+  if (db.length > 0) return db;
 
-export async function getCompanyQuote(ticker: string): Promise<CompanyQuote> {
-  return fetchYahooQuote(ticker);
+  return fetchYahooPrices(ticker, "all");
 }
 
 /** Institutions holding a ticker in their most recent filed quarter. */

@@ -1,4 +1,8 @@
 import type { PriceBar } from "@/lib/types";
+import type { ChartRangeKey } from "@/lib/prices/range";
+
+export type { ChartRangeKey } from "@/lib/prices/range";
+export { filterBarsToRange } from "@/lib/prices/range";
 
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
@@ -50,8 +54,6 @@ export type CompanyQuote = {
   employees: number | null;
 };
 
-export type ChartRangeKey = "1d" | "1w" | "1m" | "ytd" | "all";
-
 function rawNum(v: YahooRawNumber | undefined): number | null {
   if (v == null) return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -92,13 +94,15 @@ function parseChartBars(
 async function yahooChart(
   symbol: string,
   params: string,
-  revalidate: number
+  revalidate: number,
+  timeoutMs = 8000
 ): Promise<YahooChartResponse | null> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?${params}`;
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": UA, Accept: "application/json" },
       next: { revalidate },
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) return null;
     return (await res.json()) as YahooChartResponse;
@@ -130,30 +134,6 @@ export async function fetchYahooPrices(
   return parseChartBars(symbol, json, false);
 }
 
-/** Slice daily bars down to the selected chart range. */
-export function filterBarsToRange(
-  bars: PriceBar[],
-  range: ChartRangeKey
-): PriceBar[] {
-  if (bars.length === 0 || range === "all" || range === "1d") return bars;
-
-  const last = bars[bars.length - 1]?.date?.slice(0, 10);
-  if (!last) return bars;
-  const end = new Date(`${last}T00:00:00Z`);
-  let start = new Date(end);
-
-  if (range === "1w") start.setUTCDate(start.getUTCDate() - 7);
-  else if (range === "1m") start.setUTCMonth(start.getUTCMonth() - 1);
-  else if (range === "ytd") {
-    start = new Date(Date.UTC(end.getUTCFullYear(), 0, 1));
-  } else return bars;
-
-  const startStr = start.toISOString().slice(0, 10);
-  const filtered = bars.filter((b) => b.date.slice(0, 10) >= startStr);
-  // Never return empty if we have history — show whatever exists.
-  return filtered.length > 0 ? filtered : bars;
-}
-
 type CrumbSession = { cookie: string; crumb: string; fetchedAt: number };
 let crumbSession: CrumbSession | null = null;
 
@@ -175,49 +155,38 @@ async function getYahooSession(): Promise<CrumbSession | null> {
     return crumbSession;
   }
 
-  // Only use fc.yahoo.com → getcrumb. Fetching finance.yahoo.com/quote overflows
-  // Node/undici header limits (UND_ERR_HEADERS_OVERFLOW) and breaks the About panel.
-  const crumbHosts = [
-    "query1.finance.yahoo.com",
-    "query2.finance.yahoo.com",
-  ];
+  // Fast path only — no sleep/retry loops on the request path (those made
+  // Vercel stock pages hang ~30s when Yahoo rate-limits).
+  try {
+    const consent = await fetch("https://fc.yahoo.com", {
+      headers: { "User-Agent": UA },
+      redirect: "manual",
+      cache: "no-store",
+      signal: AbortSignal.timeout(2500),
+    });
+    const cookie = collectCookies(consent).join("; ");
+    if (!cookie) return null;
 
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      const consent = await fetch("https://fc.yahoo.com", {
-        headers: { "User-Agent": UA },
-        redirect: "manual",
+    for (const host of [
+      "query1.finance.yahoo.com",
+      "query2.finance.yahoo.com",
+    ]) {
+      const crumbRes = await fetch(`https://${host}/v1/test/getcrumb`, {
+        headers: { "User-Agent": UA, Cookie: cookie },
         cache: "no-store",
+        signal: AbortSignal.timeout(2500),
       });
-      const cookie = collectCookies(consent).join("; ");
-      if (!cookie) {
-        await sleep(750 * (attempt + 1));
-        continue;
-      }
+      if (!crumbRes.ok) continue;
+      const crumb = (await crumbRes.text()).trim();
+      if (!crumb || crumb.length > 200 || crumb.includes("<")) continue;
 
-      for (const host of crumbHosts) {
-        const crumbRes = await fetch(`https://${host}/v1/test/getcrumb`, {
-          headers: { "User-Agent": UA, Cookie: cookie },
-          cache: "no-store",
-        });
-        if (crumbRes.status === 429) continue;
-        if (!crumbRes.ok) continue;
-        const crumb = (await crumbRes.text()).trim();
-        if (!crumb || crumb.length > 200 || crumb.includes("<")) continue;
-
-        crumbSession = { cookie, crumb, fetchedAt: Date.now() };
-        return crumbSession;
-      }
-      await sleep(1200 * (attempt + 1));
-    } catch {
-      await sleep(750 * (attempt + 1));
+      crumbSession = { cookie, crumb, fetchedAt: Date.now() };
+      return crumbSession;
     }
+  } catch {
+    // fail soft — About section simply won't render
   }
   return null;
-}
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 const emptyQuote = (): CompanyQuote => ({
@@ -267,6 +236,7 @@ export async function fetchYahooQuote(ticker: string): Promise<CompanyQuote> {
             Accept: "application/json",
           },
           next: { revalidate: 3600 },
+          signal: AbortSignal.timeout(4000),
         });
 
         if (res.status === 401 || res.status === 403) {

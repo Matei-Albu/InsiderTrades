@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 export const CHART_RANGES = [
   { key: "1d", label: "1D" },
   { key: "1w", label: "1W" },
@@ -19,35 +17,4 @@ export function parseChartRange(
   return CHART_RANGES.some((r) => r.key === raw)
     ? (raw as ChartRange)
     : fallback;
-}
-
-/** Range control for stock price charts (styled like ResultsLimit). */
-export default function ChartRange({
-  current,
-  buildHref,
-}: {
-  current: ChartRange;
-  buildHref: (range: ChartRange) => string;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs uppercase tracking-wide text-muted">Range</span>
-      <div className="flex rounded-lg border border-border bg-surface p-0.5">
-        {CHART_RANGES.map((r) => (
-          <Link
-            key={r.key}
-            href={buildHref(r.key)}
-            scroll={false}
-            className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
-              current === r.key
-                ? "bg-surface-2 font-medium text-foreground"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            {r.label}
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
 }
