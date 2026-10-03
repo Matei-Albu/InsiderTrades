@@ -110,6 +110,7 @@ export default async function StockPage({
       </Suspense>
 
       <StockChartPanel
+        key={ticker}
         ticker={ticker}
         allBars={allBars}
         markers={markers}

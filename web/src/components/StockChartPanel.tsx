@@ -34,16 +34,12 @@ export default function StockChartPanel({
   const [intradayDone, setIntradayDone] = useState(false);
   const [pending, startTransition] = useTransition();
 
+  // Fetch only while 1D is selected. Reset loading flags in the click handler
+  // (not synchronously inside this effect) to satisfy react-hooks/set-state-in-effect.
   useEffect(() => {
-    if (range !== "1d") {
-      setIntraday(null);
-      setIntradayDone(false);
-      return;
-    }
+    if (range !== "1d") return;
 
     let cancelled = false;
-    setIntraday(null);
-    setIntradayDone(false);
 
     fetch(`/api/prices/${encodeURIComponent(ticker)}?range=1d`)
       .then(async (res) => {
@@ -77,6 +73,16 @@ export default function StockChartPanel({
   const usingDailyFallback =
     range === "1d" && intradayDone && !(intraday && intraday.length > 0);
 
+  function selectRange(next: ChartRange) {
+    startTransition(() => {
+      setRange(next);
+      if (next === "1d") {
+        setIntraday(null);
+        setIntradayDone(false);
+      }
+    });
+  }
+
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -94,7 +100,7 @@ export default function StockChartPanel({
               <button
                 key={r.key}
                 type="button"
-                onClick={() => startTransition(() => setRange(r.key))}
+                onClick={() => selectRange(r.key)}
                 className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
                   range === r.key
                     ? "bg-surface-2 font-medium text-foreground"
