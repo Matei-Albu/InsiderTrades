@@ -176,21 +176,24 @@ export async function getPrices(
 }
 
 async function loadDailyHistory(ticker: string): Promise<PriceBar[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("prices")
-    .select("*")
-    .eq("ticker", ticker)
-    .order("date", { ascending: true })
-    .limit(1500);
-  if (error) throw new Error(`prices: ${error.message}`);
-  const db = (data ?? []) as PriceBar[];
+  const [yahoo, db] = await Promise.all([
+    fetchYahooPrices(ticker, "all").catch(() => [] as PriceBar[]),
+    (async () => {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("prices")
+        .select("*")
+        .eq("ticker", ticker)
+        .order("date", { ascending: true })
+        .limit(1500);
+      if (error) throw new Error(`prices: ${error.message}`);
+      return (data ?? []) as PriceBar[];
+    })(),
+  ]);
 
-  // Use DB when we already have bars — avoids waiting on Yahoo from Vercel
-  // (often slow / rate-limited and was freezing stock pages ~30s).
-  if (db.length > 0) return db;
-
-  return fetchYahooPrices(ticker, "all");
+  // Prefer the longer series (Yahoo 5y usually wins; DB is the offline fallback).
+  if (yahoo.length >= db.length && yahoo.length > 0) return yahoo;
+  return db;
 }
 
 /** Institutions holding a ticker in their most recent filed quarter. */

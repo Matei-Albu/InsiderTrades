@@ -12,6 +12,12 @@ import TradeMarkerLegend, {
 } from "@/components/TradeMarkerLegend";
 import { filterBarsToRange } from "@/lib/prices/range";
 
+/** When Yahoo intraday fails, show the last few daily closes so 1D isn't blank. */
+function dailyFallback(allBars: ChartBar[]): ChartBar[] {
+  if (allBars.length === 0) return [];
+  return allBars.slice(-5);
+}
+
 export default function StockChartPanel({
   ticker,
   allBars,
@@ -25,19 +31,19 @@ export default function StockChartPanel({
 }) {
   const [range, setRange] = useState<ChartRange>(DEFAULT_CHART_RANGE);
   const [intraday, setIntraday] = useState<ChartBar[] | null>(null);
-  const [intradayError, setIntradayError] = useState(false);
+  const [intradayDone, setIntradayDone] = useState(false);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     if (range !== "1d") {
       setIntraday(null);
-      setIntradayError(false);
+      setIntradayDone(false);
       return;
     }
 
     let cancelled = false;
     setIntraday(null);
-    setIntradayError(false);
+    setIntradayDone(false);
 
     fetch(`/api/prices/${encodeURIComponent(ticker)}?range=1d`)
       .then(async (res) => {
@@ -45,10 +51,14 @@ export default function StockChartPanel({
         return (await res.json()) as ChartBar[];
       })
       .then((bars) => {
-        if (!cancelled) setIntraday(bars);
+        if (cancelled) return;
+        setIntraday(Array.isArray(bars) && bars.length > 0 ? bars : null);
+        setIntradayDone(true);
       })
       .catch(() => {
-        if (!cancelled) setIntradayError(true);
+        if (cancelled) return;
+        setIntraday(null);
+        setIntradayDone(true);
       });
 
     return () => {
@@ -57,15 +67,26 @@ export default function StockChartPanel({
   }, [range, ticker]);
 
   const bars = useMemo(() => {
-    if (range === "1d") return intraday ?? [];
-    return filterBarsToRange(allBars, range);
-  }, [range, allBars, intraday]);
+    if (range !== "1d") return filterBarsToRange(allBars, range);
+    if (intraday && intraday.length > 0) return intraday;
+    if (intradayDone) return dailyFallback(allBars);
+    return [];
+  }, [range, allBars, intraday, intradayDone]);
 
-  const loading1d = range === "1d" && intraday == null && !intradayError;
+  const loading1d = range === "1d" && !intradayDone;
+  const usingDailyFallback =
+    range === "1d" && intradayDone && !(intraday && intraday.length > 0);
 
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        {usingDailyFallback ? (
+          <span className="text-[11px] text-muted">
+            Intraday feed unavailable — showing recent daily closes
+          </span>
+        ) : (
+          <span />
+        )}
         <div className="flex items-center gap-2">
           <span className="text-xs uppercase tracking-wide text-muted">Range</span>
           <div className="flex rounded-lg border border-border bg-surface p-0.5">
@@ -89,7 +110,7 @@ export default function StockChartPanel({
 
       <div className={pending || loading1d ? "opacity-60 transition-opacity" : ""}>
         <PriceChart
-          key={`${ticker}-${range}-${bars.length}`}
+          key={`${ticker}-${range}-${bars.length}-${usingDailyFallback}`}
           ticker={ticker}
           bars={bars}
           markers={markers}

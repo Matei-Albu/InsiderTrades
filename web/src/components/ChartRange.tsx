@@ -7,7 +7,7 @@ export const CHART_RANGES = [
 ] as const;
 
 export type ChartRange = (typeof CHART_RANGES)[number]["key"];
-export const DEFAULT_CHART_RANGE: ChartRange = "1m";
+export const DEFAULT_CHART_RANGE: ChartRange = "all";
 
 export function parseChartRange(
   value: string | string[] | undefined,

@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { fetchYahooPrices } from "@/lib/prices/yahoo";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 20;
 
 /** On-demand price bars (used for 1D intraday from the client chart). */
 export async function GET(
-  request: Request,
+  _request: Request,
   context: { params: Promise<{ ticker: string }> }
 ) {
   const { ticker: raw } = await context.params;
@@ -21,7 +22,11 @@ export async function GET(
       .map((b) => ({ date: b.date, close: b.close as number }));
     return NextResponse.json(payload, {
       headers: {
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+        // Short cache — empty results should not stick around long.
+        "Cache-Control":
+          payload.length > 0
+            ? "public, s-maxage=60, stale-while-revalidate=300"
+            : "public, s-maxage=10, stale-while-revalidate=30",
       },
     });
   } catch {

@@ -79,8 +79,11 @@ export default async function StockPage({
     }));
 
   const allBars = prices
-    .filter((p) => p.close != null)
-    .map((p) => ({ date: p.date, close: p.close! }));
+    .map((p) => ({
+      date: String(p.date).slice(0, 10),
+      close: Number(p.close),
+    }))
+    .filter((p) => Number.isFinite(p.close));
   const lastClose = allBars.at(-1)?.close;
 
   return (

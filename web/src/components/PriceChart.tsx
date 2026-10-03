@@ -119,14 +119,45 @@ export default function PriceChart({
       bottomColor: "transparent",
       lineWidth: 2,
     });
-    const data = bars.map((b) => ({ time: toTime(b.date), value: b.close }));
-    series.setData(data);
+    const data = bars
+      .map((b) => ({
+        time: toTime(b.date),
+        value: Number(b.close),
+      }))
+      .filter(
+        (b) =>
+          Number.isFinite(b.time as number) &&
+          Number.isFinite(b.value) &&
+          (b.time as number) > 0
+      )
+      .sort((a, b) => (a.time as number) - (b.time as number));
 
-    const first = toTime(bars[0].date);
-    const last = toTime(bars[bars.length - 1].date);
+    // Drop duplicate timestamps (lightweight-charts requires strictly ascending times).
+    const deduped: typeof data = [];
+    for (const point of data) {
+      const prev = deduped[deduped.length - 1];
+      if (prev && prev.time === point.time) {
+        prev.value = point.value;
+      } else {
+        deduped.push(point);
+      }
+    }
+    if (deduped.length === 0) {
+      chart.remove();
+      return;
+    }
+    series.setData(deduped);
+
+    const first = deduped[0].time;
+    const last = deduped[deduped.length - 1].time;
     const seriesMarkers: SeriesMarker<Time>[] = aggregateMarkers(markers)
       .map((m) => ({ ...m, time: toTime(m.date) }))
-      .filter((m) => m.time >= first && m.time <= last)
+      .filter(
+        (m) =>
+          Number.isFinite(m.time as number) &&
+          m.time >= first &&
+          m.time <= last
+      )
       .sort((a, b) => (a.time as number) - (b.time as number))
       .map((m) => ({
         time: m.time,
@@ -158,7 +189,7 @@ export default function PriceChart({
         return;
       }
 
-      const leftIdx = leftmostVisibleIndex(chart, data.length);
+      const leftIdx = leftmostVisibleIndex(chart, deduped.length);
       if (leftIdx == null) {
         hidePct();
         return;

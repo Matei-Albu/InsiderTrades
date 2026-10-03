@@ -119,9 +119,25 @@ export async function fetchYahooPrices(
   const symbol = ticker.toUpperCase();
 
   if (rangeKey === "1d") {
-    const json = await yahooChart(symbol, "range=1d&interval=5m", 300);
-    if (!json) return [];
-    return parseChartBars(symbol, json, true);
+    // Vercel IPs often get empty/blocked on 5m; try a few shapes before giving up.
+    const attempts = [
+      "range=1d&interval=5m",
+      "range=1d&interval=15m",
+      "range=5d&interval=15m",
+      "range=5d&interval=1h",
+    ];
+    for (const params of attempts) {
+      const json = await yahooChart(symbol, params, 60, 12_000);
+      const bars = json ? parseChartBars(symbol, json, true) : [];
+      if (bars.length > 0) {
+        // For multi-day fallbacks, keep only the most recent session.
+        if (params.startsWith("range=5d")) {
+          return lastSessionBars(bars);
+        }
+        return bars;
+      }
+    }
+    return [];
   }
 
   // Always request the long window; callers filter to 1w/1m/ytd.
@@ -132,6 +148,14 @@ export async function fetchYahooPrices(
   );
   if (!json) return [];
   return parseChartBars(symbol, json, false);
+}
+
+/** Keep bars from the latest calendar day present in the series. */
+function lastSessionBars(bars: PriceBar[]): PriceBar[] {
+  if (bars.length === 0) return bars;
+  const lastDay = bars[bars.length - 1].date.slice(0, 10);
+  const session = bars.filter((b) => b.date.slice(0, 10) === lastDay);
+  return session.length > 0 ? session : bars.slice(-30);
 }
 
 type CrumbSession = { cookie: string; crumb: string; fetchedAt: number };
