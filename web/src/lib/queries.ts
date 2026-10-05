@@ -20,7 +20,17 @@ export type FeedFilter = {
   minValue: number;
   /** Restrict to a single ticker. */
   ticker?: string;
+  /** Free-text match on ticker, company name or insider name. */
+  search?: string;
 };
+
+/**
+ * Strip everything that could alter a PostgREST `or()` filter (commas, parens,
+ * wildcards, dots-as-operators are harmless but we keep only name-ish chars).
+ */
+export function sanitizeSearch(raw: string | undefined): string {
+  return (raw ?? "").replace(/[^a-zA-Z0-9 '\-]/g, "").trim().slice(0, 40);
+}
 
 export async function getTrades(filter: FeedFilter, limit = 100): Promise<InsiderTrade[]> {
   const supabase = await createClient();
@@ -34,6 +44,12 @@ export async function getTrades(filter: FeedFilter, limit = 100): Promise<Inside
   if (filter.side === "sells") query = query.eq("transaction_code", "S");
   if (filter.minValue > 0) query = query.gte("total_value", filter.minValue);
   if (filter.ticker) query = query.eq("ticker", filter.ticker.toUpperCase());
+  const search = sanitizeSearch(filter.search);
+  if (search) {
+    query = query.or(
+      `ticker.ilike.${search}%,insider_name.ilike.%${search}%,company_name.ilike.%${search}%`,
+    );
+  }
 
   const { data, error } = await query;
   if (error) throw new Error(`insider_trades: ${error.message}`);

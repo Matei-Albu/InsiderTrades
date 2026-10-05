@@ -2,16 +2,23 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { Star } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
 export default function WatchButton({
   ticker,
   initialWatching,
   signedIn,
+  variant = "full",
+  className,
 }: {
   ticker: string;
   initialWatching: boolean;
   signedIn: boolean;
+  /** "full" is the labelled button; "icon" is a compact star for list rows. */
+  variant?: "full" | "icon";
+  className?: string;
 }) {
   const router = useRouter();
   const [watching, setWatching] = useState(initialWatching);
@@ -46,6 +53,27 @@ export default function WatchButton({
       }
       router.refresh();
     });
+  }
+
+  if (variant === "icon") {
+    return (
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={pending}
+        aria-pressed={watching}
+        aria-label={
+          watching ? `Remove ${ticker} from watchlist` : `Add ${ticker} to watchlist`
+        }
+        className={cn(
+          "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50",
+          watching && "text-primary",
+          className,
+        )}
+      >
+        <Star className={cn("size-4", watching && "fill-current")} />
+      </button>
+    );
   }
 
   return (
