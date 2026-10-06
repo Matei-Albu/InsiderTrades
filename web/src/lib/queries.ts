@@ -56,6 +56,20 @@ export async function getTrades(filter: FeedFilter, limit = 100): Promise<Inside
   return data ?? [];
 }
 
+/** Current user plus the tickers on their watchlist (empty set when signed out). */
+export async function getUserWatchlist() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let watched = new Set<string>();
+  if (user) {
+    const { data } = await supabase.from("watchlists").select("ticker");
+    watched = new Set((data ?? []).map((w) => w.ticker));
+  }
+  return { user, watched };
+}
+
 export async function getClusterBuys(): Promise<ClusterBuy[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -80,6 +94,33 @@ export async function getInstitutions(): Promise<Institution[]> {
     .order("name");
   if (error) throw new Error(`institutions: ${error.message}`);
   return data ?? [];
+}
+
+export type InstitutionMove = HoldingChange & { institution_name: string };
+
+/**
+ * Biggest recent position changes (new / added / trimmed) across all tracked
+ * institutions, for the homepage. Newest quarter first, then by position size.
+ */
+export async function getLatestInstitutionMoves(limit = 3): Promise<InstitutionMove[]> {
+  const supabase = await createClient();
+  const [{ data, error }, institutions] = await Promise.all([
+    supabase
+      .from("holdings_13f_changes")
+      .select("*")
+      .in("change", ["new", "added", "trimmed"])
+      .not("ticker", "is", null)
+      .order("period_of_report", { ascending: false })
+      .order("value", { ascending: false })
+      .limit(limit),
+    getInstitutions(),
+  ]);
+  if (error) throw new Error(`holdings_13f_changes: ${error.message}`);
+  const names = new Map(institutions.map((i) => [i.cik, i.name]));
+  return (data ?? []).map((m: HoldingChange) => ({
+    ...m,
+    institution_name: names.get(m.institution_cik) ?? "Institution",
+  }));
 }
 
 export async function getInstitutionBySlug(slug: string): Promise<Institution | null> {

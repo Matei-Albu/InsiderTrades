@@ -1,178 +1,121 @@
-import { Search } from "lucide-react";
-import InsiderTradeRow, { ROW_GRID } from "@/components/InsiderTradeRow";
-import PageHeader from "@/components/PageHeader";
-import ResultsLimit, {
-  DEFAULT_RESULT_LIMIT,
-  parseResultLimit,
-} from "@/components/ResultsLimit";
-import SegmentedLinks from "@/components/SegmentedLinks";
-import { Input } from "@/components/ui/input";
+import { redirect } from "next/navigation";
 import {
-  getClusterTickers,
+  HomeHero,
+  LatestFilings,
+  TrackerModules,
+  WatchlistCta,
+} from "@/components/HomeSections";
+import TickerTape, { type TapeItem } from "@/components/TickerTape";
+import { formatMoney } from "@/lib/format";
+import {
+  getClusterBuys,
+  getCongressTrades,
+  getPoliticians,
   getTrades,
-  sanitizeSearch,
-  type FeedFilter,
+  getUserWatchlist,
 } from "@/lib/queries";
-import { createClient } from "@/lib/supabase/server";
-import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-const sides = [
-  { key: "buys", label: "Buys" },
-  { key: "sells", label: "Sells" },
-  { key: "all", label: "All activity" },
-] as const;
+// The feed used to live at "/", so old bookmarks like /?side=all still work.
+const LEGACY_FEED_PARAMS = ["side", "min", "limit", "q"] as const;
 
-const minValues = [
-  { key: 0, label: "Any size" },
-  { key: 50_000, label: "$50K+" },
-  { key: 250_000, label: "$250K+" },
-  { key: 1_000_000, label: "$1M+" },
-] as const;
-
-type Filters = { side: string; min: number; limit: number; q: string };
-
-function filterParams({ side, min, limit, q }: Filters) {
-  const params = new URLSearchParams();
-  if (side !== "buys") params.set("side", side);
-  if (min > 0) params.set("min", String(min));
-  if (limit !== DEFAULT_RESULT_LIMIT) params.set("limit", String(limit));
-  if (q) params.set("q", q);
-  return params;
-}
-
-function filterHref(filters: Filters) {
-  const qs = filterParams(filters).toString();
-  return qs ? `/?${qs}` : "/";
-}
-
-function first(v: string | string[] | undefined) {
-  return Array.isArray(v) ? v[0] : v;
-}
-
-export default async function FeedPage({ searchParams }: PageProps<"/">) {
-  const params = await searchParams;
-  const sideRaw = first(params.side);
-  const side = (["buys", "sells", "all"].includes(String(sideRaw))
-    ? sideRaw
-    : "buys") as FeedFilter["side"];
-  const minValue = Number(first(params.min)) || 0;
-  const limit = parseResultLimit(params.limit);
-  const q = sanitizeSearch(first(params.q));
-  const current: Filters = { side, min: minValue, limit, q };
-
-  const supabase = await createClient();
-  const [trades, clusterTickers, userResult] = await Promise.all([
-    getTrades({ side, minValue, search: q }, limit),
-    getClusterTickers(),
-    supabase.auth.getUser(),
-  ]);
-
-  const user = userResult.data.user;
-  let watched = new Set<string>();
-  if (user) {
-    const { data } = await supabase.from("watchlists").select("ticker");
-    watched = new Set((data ?? []).map((w) => w.ticker));
+/** The landing page should still render if one non-essential section fails. */
+async function safe<T>(label: string, promise: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await promise;
+  } catch (err) {
+    console.error(`home: ${label} failed`, err);
+    return fallback;
   }
+}
 
-  // The search box is a plain GET form; carry the other filters along as hidden fields.
-  const hidden = Array.from(filterParams({ ...current, q: "" }).entries());
+export default async function HomePage({ searchParams }: PageProps<"/">) {
+  const params = await searchParams;
+  const legacy = new URLSearchParams();
+  for (const key of LEGACY_FEED_PARAMS) {
+    const v = Array.isArray(params[key]) ? params[key][0] : params[key];
+    if (v) legacy.set(key, v);
+  }
+  if (legacy.size > 0) redirect(`/feed?${legacy.toString()}`);
+
+  const [buys, sells, congress, politicians, clusters, { user, watched }] =
+    await Promise.all([
+      safe("buys", getTrades({ side: "buys", minValue: 0 }, 12), []),
+      safe("sells", getTrades({ side: "sells", minValue: 0 }, 6), []),
+      safe("congress", getCongressTrades({ side: "all" }, 8), []),
+      safe("politicians", getPoliticians(), []),
+      safe("clusters", getClusterBuys(), []),
+      safe("watchlist", getUserWatchlist(), {
+        user: null,
+        watched: new Set<string>(),
+      }),
+    ]);
+
+  const clusterTickers = new Set(
+    clusters.map((c) => c.ticker).filter((t): t is string => !!t),
+  );
+
+  const tape: TapeItem[] = [
+    ...[...buys, ...sells]
+      .sort((a, b) => b.filed_at.localeCompare(a.filed_at))
+      .flatMap((t) =>
+        t.ticker
+          ? [
+              {
+                key: `f4-${t.id}`,
+                symbol: t.ticker,
+                who: t.insider_name,
+                type: t.transaction_code === "P" ? ("Buy" as const) : ("Sell" as const),
+                amount: formatMoney(t.total_value),
+              },
+            ]
+          : [],
+      ),
+    ...congress
+      .flatMap((t) =>
+        t.ticker &&
+        (t.transaction_type === "purchase" || t.transaction_type === "sale")
+          ? [
+              {
+                key: `congress-${t.id}`,
+                symbol: t.ticker,
+                who: t.politician_name,
+                type:
+                  t.transaction_type === "purchase"
+                    ? ("Buy" as const)
+                    : ("Sell" as const),
+                amount:
+                  t.amount_min != null ? `${formatMoney(t.amount_min)}+` : "—",
+              },
+            ]
+          : [],
+      )
+      .slice(0, 5),
+  ];
+
+  const ctaSymbols = [
+    ...new Set(buys.map((t) => t.ticker).filter((t): t is string => !!t)),
+  ].slice(0, 6);
 
   return (
-    <>
-      <PageHeader
-        eyebrow="Form 4 · Live"
-        title="Latest insider trades"
-        description="Open-market purchases and sales by officers, directors and 10% owners, straight from SEC Form 4 filings."
-      >
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-buy opacity-60" />
-            <span className="relative inline-flex size-2 rounded-full bg-buy" />
-          </span>
-          Refreshed every 15 min on market days
-        </div>
-      </PageHeader>
-
-      <div className="mx-auto max-w-6xl px-4 py-8 md:px-6">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-wrap gap-2">
-              <SegmentedLinks
-                label="Trade type"
-                options={sides.map((s) => ({
-                  key: s.key,
-                  label: s.label,
-                  href: filterHref({ ...current, side: s.key }),
-                  active: side === s.key,
-                }))}
-              />
-              <SegmentedLinks
-                label="Trade size"
-                options={minValues.map((m) => ({
-                  key: m.key,
-                  label: m.label,
-                  href: filterHref({ ...current, min: m.key }),
-                  active: minValue === m.key,
-                }))}
-              />
-            </div>
-            <form action="/" method="get" role="search" className="relative md:w-72">
-              {hidden.map(([k, v]) => (
-                <input key={k} type="hidden" name={k} value={v} />
-              ))}
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                name="q"
-                defaultValue={q}
-                key={q}
-                placeholder="Ticker, company or insider"
-                aria-label="Filter by ticker, company or insider"
-                className="h-9 bg-card pl-9"
-              />
-            </form>
-          </div>
-
-          <div className="overflow-hidden rounded-lg border bg-card">
-            <div
-              className={cn(
-                "hidden gap-4 border-b bg-secondary/60 px-5 py-2.5 font-mono text-[11px] font-medium uppercase tracking-wider text-muted-foreground md:grid",
-                ROW_GRID,
-              )}
-            >
-              <span>Company</span>
-              <span>Insider</span>
-              <span>Transaction</span>
-              <span className="text-right">Value · Filed</span>
-              <span className="w-8" />
-            </div>
-            {trades.length > 0 ? (
-              <ul className="divide-y">
-                {trades.map((t) => (
-                  <InsiderTradeRow
-                    key={t.id}
-                    trade={t}
-                    isCluster={!!t.ticker && clusterTickers.has(t.ticker)}
-                    watching={!!t.ticker && watched.has(t.ticker)}
-                    signedIn={!!user}
-                  />
-                ))}
-              </ul>
-            ) : (
-              <p className="px-5 py-12 text-center text-sm text-muted-foreground">
-                No filings match these filters.
-              </p>
-            )}
-          </div>
-
-          <ResultsLimit
-            current={limit}
-            shown={trades.length}
-            buildHref={(n) => filterHref({ ...current, limit: n })}
-          />
-        </div>
+    <main>
+      <TickerTape items={tape} />
+      <HomeHero trades={buys.slice(0, 3)} signedIn={!!user} />
+      <div className="mx-auto flex max-w-6xl flex-col gap-14 px-4 py-16 md:px-6">
+        <TrackerModules
+          congress={congress}
+          politicians={politicians}
+          topCluster={clusters[0]}
+        />
+        <LatestFilings
+          trades={buys.slice(0, 6)}
+          clusterTickers={clusterTickers}
+          watched={watched}
+          signedIn={!!user}
+        />
+        <WatchlistCta symbols={ctaSymbols} />
       </div>
-    </>
+    </main>
   );
 }

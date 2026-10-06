@@ -5,7 +5,7 @@ import { PersonAvatar, TickerLogo, TradeTypeTag } from "@/components/media";
 import WatchButton from "@/components/WatchButton";
 import { cn } from "@/lib/utils";
 
-function insiderRole(trade: InsiderTrade): { text: string; emphasised: boolean } | null {
+export function insiderRole(trade: InsiderTrade): { text: string; emphasised: boolean } | null {
   const title = trade.insider_title;
   if (title) {
     const isTopExec = /chief executive|chief financial|\bceo\b|\bcfo\b|president/i.test(title);

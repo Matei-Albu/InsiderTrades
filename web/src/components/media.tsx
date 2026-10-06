@@ -105,6 +105,28 @@ export function PersonAvatar({
   );
 }
 
+export function PartyTag({
+  party,
+  state,
+}: {
+  party: string | null;
+  state: string | null;
+}) {
+  if (!party) return null;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-sm border px-1.5 py-0.5 font-mono text-[11px] font-medium",
+        party === "D" && "border-primary/30 text-primary",
+        party === "R" && "border-sell/30 text-sell",
+        party !== "D" && party !== "R" && "text-muted-foreground",
+      )}
+    >
+      {state ? `${party}-${state}` : party}
+    </span>
+  );
+}
+
 /** Form 4 transaction code as a coloured tag: P/S get buy/sell colours, the rest are neutral. */
 export function TradeTypeTag({
   code,

@@ -1,5 +1,5 @@
 export const NAV_LINKS = [
-  { href: "/", label: "Live feed" },
+  { href: "/feed", label: "Live feed" },
   { href: "/congress", label: "Congress" },
   { href: "/clusters", label: "Cluster buys" },
   { href: "/institutions", label: "Institutions" },
