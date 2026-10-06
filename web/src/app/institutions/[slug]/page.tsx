@@ -1,20 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
+import { HoldingChangeTag, TickerLogo } from "@/components/media";
+import PageHeader from "@/components/PageHeader";
 import {
   getHoldingChanges,
   getInstitutionBySlug,
   getInstitutionFilings,
 } from "@/lib/queries";
 import { formatDate, formatMoney, formatShares } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
-
-const changeStyles: Record<string, string> = {
-  new: "bg-accent/15 text-accent",
-  added: "bg-gain/15 text-gain",
-  trimmed: "bg-loss/15 text-loss",
-  unchanged: "bg-surface-2 text-muted",
-};
 
 export default async function InstitutionPage({
   params,
@@ -36,116 +33,134 @@ export default async function InstitutionPage({
   const totalValue = currentFiling?.total_value ?? 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{institution.name}</h1>
-          {institution.manager && (
-            <p className="mt-1 text-sm text-muted">{institution.manager}</p>
-          )}
-        </div>
+    <main>
+      <PageHeader
+        eyebrow="13F-HR · Institution"
+        title={institution.name}
+        description={institution.manager ?? "Quarterly 13F portfolio"}
+      >
         {currentFiling && (
-          <div className="text-right">
-            <div className="font-mono text-xl font-semibold">
+          <div className="flex flex-col md:items-end">
+            <span className="font-mono text-2xl font-semibold">
               {formatMoney(currentFiling.total_value)}
-            </div>
-            <div className="text-xs text-muted">
+            </span>
+            <span className="font-mono text-xs text-muted-foreground">
               reported {formatDate(currentFiling.filed_at)}
-            </div>
+            </span>
           </div>
         )}
-      </div>
+      </PageHeader>
 
-      {filings.length === 0 ? (
-        <div className="rounded-xl border border-border bg-surface p-10 text-center text-muted">
-          No 13F filings ingested yet for this institution.
-        </div>
-      ) : (
-        <>
-          <div className="flex flex-wrap gap-1.5">
-            {filings.map((f) => (
-              <Link
-                key={f.accession_no}
-                href={`/institutions/${slug}?q=${f.period_of_report}`}
-                className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
-                  f.period_of_report === period
-                    ? "border-accent bg-accent/10 font-medium text-accent"
-                    : "border-border bg-surface text-muted hover:text-foreground"
-                }`}
-              >
-                {formatDate(f.period_of_report)}
-              </Link>
-            ))}
-          </div>
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 md:px-6">
+        <Link
+          href="/institutions"
+          className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-primary hover:underline"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" /> All institutions
+        </Link>
 
-          <div className="overflow-x-auto rounded-xl border border-border bg-surface">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
-                  <th className="px-4 py-3">Holding</th>
-                  <th className="px-4 py-3">Change</th>
-                  <th className="px-4 py-3 text-right">Shares</th>
-                  <th className="px-4 py-3 text-right">Δ Shares</th>
-                  <th className="px-4 py-3 text-right">Value</th>
-                  <th className="px-4 py-3 text-right">% of portfolio</th>
-                </tr>
-              </thead>
-              <tbody>
-                {holdings.map((h) => (
-                  <tr
-                    key={h.cusip}
-                    className="border-b border-border/60 last:border-0 hover:bg-surface-2"
+        {filings.length === 0 ? (
+          <p className="rounded-lg border bg-card px-5 py-12 text-center text-sm text-muted-foreground">
+            No 13F filings ingested yet for this institution.
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Reporting period">
+              {filings.map((f) => {
+                const active = f.period_of_report === period;
+                return (
+                  <Link
+                    key={f.accession_no}
+                    href={`/institutions/${slug}?q=${f.period_of_report}`}
+                    aria-current={active ? "true" : undefined}
+                    className={cn(
+                      "rounded-md border bg-card px-3 py-1.5 font-mono text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
+                      active &&
+                        "border-primary bg-primary text-primary-foreground hover:text-primary-foreground",
+                    )}
                   >
-                    <td className="px-4 py-3">
-                      {h.ticker ? (
-                        <Link
-                          href={`/stocks/${h.ticker}`}
-                          className="font-mono font-semibold text-accent hover:underline"
-                        >
-                          {h.ticker}
-                        </Link>
-                      ) : (
-                        <span className="font-mono text-muted">{h.cusip}</span>
-                      )}
-                      <div className="max-w-[240px] truncate text-xs text-muted">
-                        {h.issuer_name}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-[11px] font-medium capitalize ${changeStyles[h.change]}`}
-                      >
-                        {h.change}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono">
-                      {formatShares(h.shares)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs">
-                      {h.pct_change_shares != null ? (
-                        <span className={h.pct_change_shares >= 0 ? "text-gain" : "text-loss"}>
-                          {h.pct_change_shares > 0 ? "+" : ""}
-                          {h.pct_change_shares}%
-                        </span>
-                      ) : h.change === "new" ? (
-                        <span className="text-accent">new</span>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono font-medium">
-                      {formatMoney(h.value)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs text-muted">
-                      {totalValue > 0 ? `${((h.value / totalValue) * 100).toFixed(1)}%` : "—"}
-                    </td>
+                    {formatDate(f.period_of_report)}
+                  </Link>
+                );
+              })}
+            </div>
+
+            <div className="overflow-x-auto rounded-lg border bg-card">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead className="border-b bg-secondary/60 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-5 py-2.5 text-left font-medium">Holding</th>
+                    <th scope="col" className="px-5 py-2.5 text-left font-medium">Change</th>
+                    <th scope="col" className="px-5 py-2.5 text-right font-medium">Shares</th>
+                    <th scope="col" className="px-5 py-2.5 text-right font-medium">Δ Shares</th>
+                    <th scope="col" className="px-5 py-2.5 text-right font-medium">Value</th>
+                    <th scope="col" className="px-5 py-2.5 text-right font-medium">% of portfolio</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </div>
+                </thead>
+                <tbody className="divide-y">
+                  {holdings.map((h) => (
+                    <tr key={h.cusip}>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <TickerLogo symbol={h.ticker} name={h.issuer_name} size="sm" />
+                          <div className="flex min-w-0 flex-col">
+                            {h.ticker ? (
+                              <Link
+                                href={`/stocks/${h.ticker}`}
+                                className="font-mono font-semibold hover:underline"
+                              >
+                                {h.ticker}
+                              </Link>
+                            ) : (
+                              <span className="font-mono font-semibold text-muted-foreground">
+                                {h.cusip}
+                              </span>
+                            )}
+                            <span className="max-w-[240px] truncate text-xs text-muted-foreground">
+                              {h.issuer_name}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <HoldingChangeTag change={h.change} />
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-mono tabular-nums">
+                        {formatShares(h.shares)}
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-mono text-xs tabular-nums">
+                        {h.pct_change_shares != null ? (
+                          <span className={h.pct_change_shares >= 0 ? "text-buy" : "text-sell"}>
+                            {h.pct_change_shares > 0 ? "+" : ""}
+                            {h.pct_change_shares}%
+                          </span>
+                        ) : h.change === "new" ? (
+                          <span className="text-primary">new</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-mono font-semibold tabular-nums">
+                        {formatMoney(h.value)}
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                        {totalValue > 0
+                          ? `${((h.value / totalValue) * 100).toFixed(1)}%`
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {holdings.length === 0 && (
+                <p className="px-5 py-12 text-center text-sm text-muted-foreground">
+                  No holdings for this period.
+                </p>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </main>
   );
 }

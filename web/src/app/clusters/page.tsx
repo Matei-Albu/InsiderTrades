@@ -1,7 +1,7 @@
-import Link from "next/link";
 import type { Metadata } from "next";
-import { getClusterBuys } from "@/lib/queries";
-import { formatDate, formatMoney, formatShares } from "@/lib/format";
+import ClusterCard from "@/components/ClusterCard";
+import PageHeader from "@/components/PageHeader";
+import { getClusterBuys, getClusterInsiders, getUserWatchlist } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -9,60 +9,37 @@ export const metadata: Metadata = { title: "Cluster Buys" };
 
 export default async function ClustersPage() {
   const clusters = await getClusterBuys();
+  const [insiders, { user, watched }] = await Promise.all([
+    getClusterInsiders(clusters),
+    getUserWatchlist(),
+  ]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Cluster buys</h1>
-        <p className="mt-1 text-sm text-muted">
-          Companies where two or more insiders made open-market buys in the last
-          14 days — historically one of the strongest insider signals.
-        </p>
+    <main>
+      <PageHeader
+        eyebrow="Signal · 2+ insiders · 14-day window"
+        title="Cluster buys"
+        description="When several insiders at the same company buy on the open market within two weeks, it's one of the strongest signals in the filings."
+      />
+      <div className="mx-auto max-w-6xl px-4 py-8 md:px-6">
+        {clusters.length === 0 ? (
+          <p className="rounded-lg border bg-card px-5 py-12 text-center text-sm text-muted-foreground">
+            No active clusters right now. Check back after the next ingest run.
+          </p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {clusters.map((c) => (
+              <ClusterCard
+                key={c.company_cik}
+                cluster={c}
+                buys={(c.ticker && insiders.get(c.ticker)) || []}
+                watching={!!c.ticker && watched.has(c.ticker)}
+                signedIn={!!user}
+              />
+            ))}
+          </div>
+        )}
       </div>
-
-      {clusters.length === 0 ? (
-        <div className="rounded-xl border border-border bg-surface p-10 text-center text-muted">
-          No active clusters right now. Check back after the next ingest run.
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {clusters.map((c) => (
-            <Link
-              key={c.company_cik}
-              href={c.ticker ? `/stocks/${c.ticker}` : "#"}
-              className="rounded-xl border border-border bg-surface p-5 transition-colors hover:border-gain/50"
-            >
-              <div className="flex items-baseline justify-between">
-                <span className="font-mono text-lg font-semibold text-accent">
-                  {c.ticker ?? "—"}
-                </span>
-                <span className="rounded bg-gain/15 px-2 py-0.5 text-xs font-medium text-gain">
-                  {c.insider_count} insiders
-                </span>
-              </div>
-              <div className="mt-1 truncate text-sm text-muted">{c.company_name}</div>
-              <dl className="mt-4 space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-muted">Total bought</dt>
-                  <dd className="font-mono font-medium text-gain">
-                    {formatMoney(c.total_value)}
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted">Shares</dt>
-                  <dd className="font-mono">{formatShares(c.total_shares)}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted">Window</dt>
-                  <dd className="text-xs">
-                    {formatDate(c.first_buy)} – {formatDate(c.last_buy)}
-                  </dd>
-                </div>
-              </dl>
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
+    </main>
   );
 }

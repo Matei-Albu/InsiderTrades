@@ -84,27 +84,30 @@ export default function StockChartPanel({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className="rounded-lg border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         {usingDailyFallback ? (
-          <span className="text-[11px] text-muted">
+          <span className="text-[11px] text-muted-foreground">
             Intraday feed unavailable — showing recent daily closes
           </span>
         ) : (
           <span />
         )}
         <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-wide text-muted">Range</span>
-          <div className="flex rounded-lg border border-border bg-surface p-0.5">
+          <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
+            Range
+          </span>
+          <div role="group" aria-label="Chart range" className="inline-flex rounded-md border bg-card p-0.5">
             {CHART_RANGES.map((r) => (
               <button
                 key={r.key}
                 type="button"
+                aria-pressed={range === r.key}
                 onClick={() => selectRange(r.key)}
-                className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
+                className={`rounded-sm px-2.5 py-1 text-xs font-medium transition-colors ${
                   range === r.key
-                    ? "bg-surface-2 font-medium text-foreground"
-                    : "text-muted hover:text-foreground"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {r.label}
@@ -124,12 +127,12 @@ export default function StockChartPanel({
       </div>
 
       <TradeMarkerLegend items={legendItems} />
-      <div className="mt-2 flex gap-4 text-xs text-muted">
+      <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
         <span>
-          <span className="inline-block h-2 w-2 rounded-full bg-gain" /> insider buy
+          <span className="inline-block h-2 w-2 rounded-full bg-buy" /> insider buy
         </span>
         <span>
-          <span className="inline-block h-2 w-2 rounded-full bg-loss" /> insider sell
+          <span className="inline-block h-2 w-2 rounded-full bg-sell" /> insider sell
         </span>
       </div>
     </div>

@@ -80,6 +80,40 @@ export async function getClusterBuys(): Promise<ClusterBuy[]> {
   return data ?? [];
 }
 
+/**
+ * The open-market buys behind each current cluster, grouped by ticker, so cards
+ * can list which insiders bought. Only buys inside that cluster's own window.
+ */
+export async function getClusterInsiders(
+  clusters: ClusterBuy[],
+): Promise<Map<string, InsiderTrade[]>> {
+  const byTicker = new Map<string, InsiderTrade[]>();
+  const live = clusters.filter((c): c is ClusterBuy & { ticker: string } => !!c.ticker);
+  if (live.length === 0) return byTicker;
+
+  const since = live.map((c) => c.first_buy).sort()[0];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("insider_trades")
+    .select("*")
+    .in("ticker", live.map((c) => c.ticker))
+    .eq("transaction_code", "P")
+    .gte("transaction_date", since)
+    .order("total_value", { ascending: false })
+    .limit(1000);
+  if (error) throw new Error(`insider_trades: ${error.message}`);
+
+  const windowStart = new Map(live.map((c) => [c.ticker, c.first_buy]));
+  for (const t of data ?? []) {
+    if (!t.ticker || !t.transaction_date) continue;
+    if (t.transaction_date < (windowStart.get(t.ticker) ?? "")) continue;
+    const list = byTicker.get(t.ticker) ?? [];
+    list.push(t);
+    byTicker.set(t.ticker, list);
+  }
+  return byTicker;
+}
+
 /** Tickers currently in a cluster-buy window, for feed badges. */
 export async function getClusterTickers(): Promise<Set<string>> {
   const clusters = await getClusterBuys();
@@ -96,19 +130,25 @@ export async function getInstitutions(): Promise<Institution[]> {
   return data ?? [];
 }
 
-export type InstitutionMove = HoldingChange & { institution_name: string };
+export type InstitutionMove = HoldingChange & {
+  institution_name: string;
+  institution_slug: string | null;
+};
 
 /**
  * Biggest recent position changes (new / added / trimmed) across all tracked
  * institutions, for the homepage. Newest quarter first, then by position size.
  */
-export async function getLatestInstitutionMoves(limit = 3): Promise<InstitutionMove[]> {
+export async function getLatestInstitutionMoves(
+  limit = 3,
+  change?: "new" | "added" | "trimmed",
+): Promise<InstitutionMove[]> {
   const supabase = await createClient();
   const [{ data, error }, institutions] = await Promise.all([
     supabase
       .from("holdings_13f_changes")
       .select("*")
-      .in("change", ["new", "added", "trimmed"])
+      .in("change", change ? [change] : ["new", "added", "trimmed"])
       .not("ticker", "is", null)
       .order("period_of_report", { ascending: false })
       .order("value", { ascending: false })
@@ -116,10 +156,11 @@ export async function getLatestInstitutionMoves(limit = 3): Promise<InstitutionM
     getInstitutions(),
   ]);
   if (error) throw new Error(`holdings_13f_changes: ${error.message}`);
-  const names = new Map(institutions.map((i) => [i.cik, i.name]));
+  const byCik = new Map(institutions.map((i) => [i.cik, i]));
   return (data ?? []).map((m: HoldingChange) => ({
     ...m,
-    institution_name: names.get(m.institution_cik) ?? "Institution",
+    institution_name: byCik.get(m.institution_cik)?.name ?? "Institution",
+    institution_slug: byCik.get(m.institution_cik)?.slug ?? null,
   }));
 }
 
@@ -289,7 +330,70 @@ export async function getInstitutionalOwners(ticker: string): Promise<
 export type CongressFilter = {
   side: "buys" | "sells" | "all";
   politician?: string; // slug
+  party?: "D" | "R";
 };
+
+/** Disclosure counts per member over the last `days`, for the "most active" tiles. */
+export async function getCongressActivity(days = 90): Promise<Map<string, number>> {
+  const supabase = await createClient();
+  const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from("congress_trade_feed")
+    .select("politician_slug")
+    .gte("filed_at", since)
+    .limit(5000);
+  if (error) throw new Error(`congress_trade_feed: ${error.message}`);
+  const counts = new Map<string, number>();
+  for (const row of data ?? []) {
+    counts.set(row.politician_slug, (counts.get(row.politician_slug) ?? 0) + 1);
+  }
+  return counts;
+}
+
+export type WatchlistActivity = {
+  company: string | null;
+  congress: number;
+  institutions: number;
+};
+
+/** Per-ticker context for watchlist cards: company name, congress trades, 13F holders. */
+export async function getWatchlistActivity(
+  tickers: string[],
+): Promise<Map<string, WatchlistActivity>> {
+  const out = new Map<string, WatchlistActivity>(
+    tickers.map((t) => [t, { company: null, congress: 0, institutions: 0 }]),
+  );
+  if (tickers.length === 0) return out;
+
+  const supabase = await createClient();
+  const [companies, congress, holdings] = await Promise.all([
+    supabase.from("companies").select("ticker, name").in("ticker", tickers),
+    supabase.from("congress_trade_feed").select("ticker").in("ticker", tickers).limit(5000),
+    supabase
+      .from("holdings_13f")
+      .select("ticker, institution_cik")
+      .in("ticker", tickers)
+      .limit(5000),
+  ]);
+
+  for (const c of companies.data ?? []) {
+    if (c.ticker && out.has(c.ticker)) out.get(c.ticker)!.company = c.name;
+  }
+  for (const c of congress.data ?? []) {
+    if (c.ticker && out.has(c.ticker)) out.get(c.ticker)!.congress += 1;
+  }
+  const holders = new Map<string, Set<string>>();
+  for (const h of holdings.data ?? []) {
+    if (!h.ticker) continue;
+    const set = holders.get(h.ticker) ?? new Set<string>();
+    set.add(h.institution_cik);
+    holders.set(h.ticker, set);
+  }
+  for (const [t, set] of holders) {
+    if (out.has(t)) out.get(t)!.institutions = set.size;
+  }
+  return out;
+}
 
 export async function getPoliticians(): Promise<Politician[]> {
   const supabase = await createClient();
@@ -316,6 +420,7 @@ export async function getCongressTrades(
   if (filter.side === "buys") query = query.eq("transaction_type", "purchase");
   if (filter.side === "sells") query = query.eq("transaction_type", "sale");
   if (filter.politician) query = query.eq("politician_slug", filter.politician);
+  if (filter.party) query = query.eq("party", filter.party);
 
   const { data, error } = await query;
   if (error) throw new Error(`congress_trade_feed: ${error.message}`);

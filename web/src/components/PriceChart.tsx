@@ -82,19 +82,19 @@ export default function PriceChart({
     const firstClose = bars[0].close;
     const lastClose = bars[bars.length - 1].close;
     const isUp = lastClose >= firstClose;
-    const lineColor = isUp ? "#16a34a" : "#dc2626";
-    const topColor = isUp ? "rgba(22, 163, 74, 0.15)" : "rgba(220, 38, 38, 0.15)";
+    const lineColor = isUp ? "#0b7a53" : "#c23b32";
+    const topColor = isUp ? "rgba(11, 122, 83, 0.15)" : "rgba(194, 59, 50, 0.15)";
 
     const chart = createChart(container, {
       height: 360,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#6b7280",
+        textColor: "#586377",
         attributionLogo: false,
       },
       grid: {
-        vertLines: { color: "#f0f1f4" },
-        horzLines: { color: "#f0f1f4" },
+        vertLines: { color: "#e7ebf2" },
+        horzLines: { color: "#e7ebf2" },
       },
       crosshair: {
         vertLine: {
@@ -104,9 +104,9 @@ export default function PriceChart({
           labelVisible: true,
         },
       },
-      rightPriceScale: { borderColor: "#e2e4e9" },
+      rightPriceScale: { borderColor: "#d9dee7" },
       timeScale: {
-        borderColor: "#e2e4e9",
+        borderColor: "#d9dee7",
         fixLeftEdge: true,
         fixRightEdge: true,
       },
@@ -162,7 +162,7 @@ export default function PriceChart({
       .map((m) => ({
         time: m.time,
         position: m.side === "buy" ? ("belowBar" as const) : ("aboveBar" as const),
-        color: m.side === "buy" ? "#16a34a" : "#dc2626",
+        color: m.side === "buy" ? "#0b7a53" : "#c23b32",
         shape: "circle" as const,
         size: 1,
       }));
@@ -207,13 +207,13 @@ export default function PriceChart({
       const pct = ((price - base) / base) * 100;
       const up = pct >= 0;
       pctEl.textContent = formatPct(pct);
-      pctEl.style.color = up ? "#16a34a" : "#dc2626";
+      pctEl.style.color = up ? "#0b7a53" : "#c23b32";
       pctEl.style.backgroundColor = up
-        ? "rgba(22, 163, 74, 0.12)"
-        : "rgba(220, 38, 38, 0.12)";
+        ? "rgba(11, 122, 83, 0.12)"
+        : "rgba(194, 59, 50, 0.12)";
       pctEl.style.borderColor = up
-        ? "rgba(22, 163, 74, 0.35)"
-        : "rgba(220, 38, 38, 0.35)";
+        ? "rgba(11, 122, 83, 0.35)"
+        : "rgba(194, 59, 50, 0.35)";
 
       // Sit just left of the crosshair vertical, near the hover price.
       const labelW = pctEl.offsetWidth || 56;
@@ -248,7 +248,7 @@ export default function PriceChart({
         aria-hidden
       />
       {!hasData && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-xl text-sm text-muted">
+        <div className="absolute inset-0 flex items-center justify-center rounded-lg text-sm text-muted-foreground">
           Price data unavailable for this ticker
         </div>
       )}

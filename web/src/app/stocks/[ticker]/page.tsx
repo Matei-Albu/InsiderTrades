@@ -2,16 +2,19 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import CompanyAbout from "@/components/CompanyAbout";
+import { TickerLogo } from "@/components/media";
+import PageHeader from "@/components/PageHeader";
 import StockChartPanel from "@/components/StockChartPanel";
-import TradesTable from "@/components/TradesTable";
+import TradesList from "@/components/TradesList";
 import type { ChartMarker } from "@/components/PriceChart";
 import type { TradeMarkerItem } from "@/components/TradeMarkerLegend";
 import WatchButton from "@/components/WatchButton";
-import { createClient } from "@/lib/supabase/server";
 import {
+  getClusterTickers,
   getInstitutionalOwners,
   getPrices,
   getTrades,
+  getUserWatchlist,
   resolveCompany,
 } from "@/lib/queries";
 import { formatMoney, formatShares } from "@/lib/format";
@@ -27,56 +30,34 @@ export default async function StockPage({
   const company = await resolveCompany(ticker);
   if (!company) notFound();
 
-  const supabase = await createClient();
   // Load full history once; range switching is client-side (no Vercel round-trip).
-  const [
-    trades,
-    prices,
-    owners,
-    {
-      data: { user },
-    },
-  ] = await Promise.all([
-    getTrades({ side: "all", minValue: 0, ticker }, 50),
-    getPrices(ticker, "all"),
-    getInstitutionalOwners(ticker),
-    supabase.auth.getUser(),
-  ]);
+  const [trades, prices, owners, clusterTickers, { user, watched }] =
+    await Promise.all([
+      getTrades({ side: "all", minValue: 0, ticker }, 50),
+      getPrices(ticker, "all"),
+      getInstitutionalOwners(ticker),
+      getClusterTickers(),
+      getUserWatchlist(),
+    ]);
 
-  let watching = false;
-  if (user) {
-    const { data } = await supabase
-      .from("watchlists")
-      .select("id")
-      .eq("ticker", ticker)
-      .maybeSingle();
-    watching = !!data;
-  }
+  const markerTrades = trades.filter(
+    (t) =>
+      t.transaction_date &&
+      (t.transaction_code === "P" || t.transaction_code === "S")
+  );
 
-  const markers: ChartMarker[] = trades
-    .filter(
-      (t) =>
-        t.transaction_date &&
-        (t.transaction_code === "P" || t.transaction_code === "S")
-    )
-    .map((t) => ({
-      date: t.transaction_date!,
-      side: t.transaction_code === "P" ? ("buy" as const) : ("sell" as const),
-      label: `${t.insider_name.split(" ")[0]} ${formatMoney(t.total_value)}`,
-    }));
+  const markers: ChartMarker[] = markerTrades.map((t) => ({
+    date: t.transaction_date!,
+    side: t.transaction_code === "P" ? ("buy" as const) : ("sell" as const),
+    label: `${t.insider_name.split(" ")[0]} ${formatMoney(t.total_value)}`,
+  }));
 
-  const markerLegend: TradeMarkerItem[] = trades
-    .filter(
-      (t) =>
-        t.transaction_date &&
-        (t.transaction_code === "P" || t.transaction_code === "S")
-    )
-    .map((t) => ({
-      date: t.transaction_date!,
-      side: t.transaction_code === "P" ? ("buy" as const) : ("sell" as const),
-      insider: t.insider_name,
-      value: t.total_value,
-    }));
+  const markerLegend: TradeMarkerItem[] = markerTrades.map((t) => ({
+    date: t.transaction_date!,
+    side: t.transaction_code === "P" ? ("buy" as const) : ("sell" as const),
+    insider: t.insider_name,
+    value: t.total_value,
+  }));
 
   const allBars = prices
     .map((p) => ({
@@ -87,61 +68,77 @@ export default async function StockPage({
   const lastClose = allBars.at(-1)?.close;
 
   return (
-    <div key={ticker} className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="font-mono text-2xl font-semibold tracking-tight">
-              {ticker}
-            </h1>
-            {lastClose != null && (
-              <span className="font-mono text-xl text-muted">
-                ${lastClose.toFixed(2)}
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-muted">{company.name}</p>
+    <main key={ticker}>
+      <PageHeader
+        eyebrow="Stock"
+        title={ticker}
+        description={company.name}
+      >
+        <div className="flex items-center gap-4">
+          {lastClose != null && (
+            <span className="font-mono text-2xl font-semibold tabular-nums">
+              ${lastClose.toFixed(2)}
+            </span>
+          )}
+          <WatchButton
+            ticker={ticker}
+            initialWatching={watched.has(ticker)}
+            signedIn={!!user}
+          />
         </div>
-        <WatchButton ticker={ticker} initialWatching={watching} signedIn={!!user} />
-      </div>
+      </PageHeader>
 
-      <Suspense fallback={null}>
-        <CompanyAbout ticker={ticker} />
-      </Suspense>
+      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 md:px-6">
+        <Suspense fallback={null}>
+          <CompanyAbout ticker={ticker} />
+        </Suspense>
 
-      <StockChartPanel
-        key={ticker}
-        ticker={ticker}
-        allBars={allBars}
-        markers={markers}
-        legendItems={markerLegend}
-      />
+        <StockChartPanel
+          key={ticker}
+          ticker={ticker}
+          allBars={allBars}
+          markers={markers}
+          legendItems={markerLegend}
+        />
 
-      {owners.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Institutional owners</h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {owners.map((o) => (
-              <Link
-                key={o.institution.cik}
-                href={`/institutions/${o.institution.slug}`}
-                className="rounded-lg border border-border bg-surface px-4 py-3 text-sm transition-colors hover:border-accent/50"
-              >
-                <div className="truncate font-medium">{o.institution.name}</div>
-                <div className="mt-1 flex justify-between font-mono text-xs text-muted">
-                  <span>{formatShares(o.shares)} sh</span>
-                  <span>{formatMoney(o.value)}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
+        {owners.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <h2 className="text-lg font-semibold">Institutional owners</h2>
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {owners.map((o) => (
+                <li key={o.institution.cik}>
+                  <Link
+                    href={`/institutions/${o.institution.slug}`}
+                    className="flex items-center gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/50"
+                  >
+                    <TickerLogo symbol={null} name={o.institution.name} size="md" />
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="truncate text-sm font-semibold">
+                        {o.institution.name}
+                      </span>
+                      <span className="flex justify-between font-mono text-xs text-muted-foreground">
+                        <span>{formatShares(o.shares)} sh</span>
+                        <span>{formatMoney(o.value)}</span>
+                      </span>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <section className="flex flex-col gap-4">
+          <h2 className="text-lg font-semibold">Insider filing history</h2>
+          <TradesList
+            trades={trades}
+            clusterTickers={clusterTickers}
+            watched={watched}
+            signedIn={!!user}
+            emptyMessage="No insider filings for this company yet."
+          />
         </section>
-      )}
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Insider filing history</h2>
-        <TradesTable trades={trades} />
-      </section>
-    </div>
+      </div>
+    </main>
   );
 }

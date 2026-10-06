@@ -26,18 +26,6 @@
   --color-sell: var(--sell);
   --color-sell-soft: var(--sell-soft);
 
-  /*
-   * Legacy aliases, used by pages that haven't been remodelled yet.
-   * They now resolve to the new palette. Remove once every page is ported.
-   * Note: `muted` stays a *text* colour here (not shadcn's muted background).
-   */
-  --color-surface: var(--card);
-  --color-surface-2: var(--secondary);
-  --color-muted: var(--muted-foreground);
-  --color-accent: var(--primary);
-  --color-gain: var(--buy);
-  --color-loss: var(--sell);
-
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);

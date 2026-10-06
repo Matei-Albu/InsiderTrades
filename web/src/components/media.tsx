@@ -6,6 +6,7 @@ const sizes = {
   sm: "size-8",
   md: "size-10",
   lg: "size-14",
+  xl: "size-20",
 } as const;
 
 type Size = keyof typeof sizes;
@@ -101,6 +102,27 @@ export function PersonAvatar({
     >
       <span aria-hidden="true">{initials}</span>
       <span className="sr-only">{name}</span>
+    </span>
+  );
+}
+
+const CHANGE_STYLES = {
+  new: "bg-primary text-primary-foreground",
+  added: "bg-buy-soft text-buy",
+  trimmed: "bg-sell-soft text-sell",
+  unchanged: "bg-secondary text-muted-foreground",
+} as const;
+
+/** 13F position change (new / added / trimmed / unchanged). */
+export function HoldingChangeTag({ change }: { change: keyof typeof CHANGE_STYLES }) {
+  return (
+    <span
+      className={cn(
+        "rounded-sm px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wider",
+        CHANGE_STYLES[change],
+      )}
+    >
+      {change}
     </span>
   );
 }

@@ -35,11 +35,11 @@ export default async function CompanyAbout({ ticker }: { ticker: string }) {
   if (!hasDescription && stats.length === 0) return null;
 
   return (
-    <section className="space-y-3">
+    <section className="flex flex-col gap-4">
       <h2 className="text-lg font-semibold">About</h2>
-      <div className="rounded-xl border border-border bg-surface p-4 sm:p-5">
+      <div className="rounded-lg border bg-card p-4 sm:p-5">
         {hasDescription && (
-          <p className="text-sm leading-relaxed text-muted">
+          <p className="text-sm leading-relaxed text-muted-foreground">
             {quote.description!.length > 520
               ? `${quote.description!.slice(0, 520).trim()}…`
               : quote.description}
@@ -54,7 +54,7 @@ export default async function CompanyAbout({ ticker }: { ticker: string }) {
                   }
                   target="_blank"
                   rel="noreferrer"
-                  className="text-accent hover:underline"
+                  className="font-medium text-primary hover:underline"
                 >
                   Website
                 </a>
@@ -65,12 +65,12 @@ export default async function CompanyAbout({ ticker }: { ticker: string }) {
         {stats.length > 0 && (
           <dl
             className={`grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4 ${
-              hasDescription ? "mt-4 border-t border-border pt-4" : ""
+              hasDescription ? "mt-4 border-t pt-4" : ""
             }`}
           >
             {stats.map((s) => (
               <div key={s.label}>
-                <dt className="text-[11px] uppercase tracking-wide text-muted">
+                <dt className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                   {s.label}
                 </dt>
                 <dd className="mt-0.5 font-mono text-sm font-medium tabular-nums">

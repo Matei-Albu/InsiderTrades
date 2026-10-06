@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { Search } from "lucide-react";
-import InsiderTradeRow, { ROW_GRID } from "@/components/InsiderTradeRow";
 import PageHeader from "@/components/PageHeader";
 import ResultsLimit, {
   DEFAULT_RESULT_LIMIT,
   parseResultLimit,
 } from "@/components/ResultsLimit";
 import SegmentedLinks from "@/components/SegmentedLinks";
+import TradesList from "@/components/TradesList";
 import { Input } from "@/components/ui/input";
 import {
   getClusterTickers,
@@ -15,7 +15,6 @@ import {
   sanitizeSearch,
   type FeedFilter,
 } from "@/lib/queries";
-import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -129,37 +128,12 @@ export default async function FeedPage({ searchParams }: PageProps<"/feed">) {
             </form>
           </div>
 
-          <div className="overflow-hidden rounded-lg border bg-card">
-            <div
-              className={cn(
-                "hidden gap-4 border-b bg-secondary/60 px-5 py-2.5 font-mono text-[11px] font-medium uppercase tracking-wider text-muted-foreground md:grid",
-                ROW_GRID,
-              )}
-            >
-              <span>Company</span>
-              <span>Insider</span>
-              <span>Transaction</span>
-              <span className="text-right">Value · Filed</span>
-              <span className="w-8" />
-            </div>
-            {trades.length > 0 ? (
-              <ul className="divide-y">
-                {trades.map((t) => (
-                  <InsiderTradeRow
-                    key={t.id}
-                    trade={t}
-                    isCluster={!!t.ticker && clusterTickers.has(t.ticker)}
-                    watching={!!t.ticker && watched.has(t.ticker)}
-                    signedIn={!!user}
-                  />
-                ))}
-              </ul>
-            ) : (
-              <p className="px-5 py-12 text-center text-sm text-muted-foreground">
-                No filings match these filters.
-              </p>
-            )}
-          </div>
+          <TradesList
+            trades={trades}
+            clusterTickers={clusterTickers}
+            watched={watched}
+            signedIn={!!user}
+          />
 
           <ResultsLimit
             current={limit}

@@ -2,6 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 
 export default function AddTickerForm() {
@@ -40,21 +43,24 @@ export default function AddTickerForm() {
   }
 
   return (
-    <form onSubmit={submit} className="flex max-w-sm gap-2">
-      <input
-        value={ticker}
-        onChange={(e) => setTicker(e.target.value)}
-        placeholder="Add ticker, e.g. NVDA"
-        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-accent"
-      />
-      <button
-        type="submit"
-        disabled={pending || !ticker.trim()}
-        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-      >
-        Add
-      </button>
-      {error && <p className="self-center text-xs text-loss">{error}</p>}
+    <form onSubmit={submit} className="flex flex-col gap-2">
+      <div className="flex gap-2">
+        <Input
+          value={ticker}
+          onChange={(e) => setTicker(e.target.value)}
+          placeholder="Add ticker, e.g. NVDA"
+          aria-label="Ticker symbol"
+          className="h-9 w-56 bg-card font-mono uppercase placeholder:font-sans placeholder:normal-case"
+        />
+        <Button type="submit" disabled={pending || !ticker.trim()} className="h-9 px-3">
+          <Plus /> Add
+        </Button>
+      </div>
+      {error && (
+        <p role="alert" className="text-xs text-sell">
+          {error}
+        </p>
+      )}
     </form>
   );
 }
