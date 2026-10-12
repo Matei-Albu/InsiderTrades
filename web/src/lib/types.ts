@@ -34,6 +34,7 @@ export type ClusterBuy = {
   total_shares: number | null;
   first_buy: string;
   last_buy: string;
+  is_active: boolean;
 };
 
 export type Institution = {

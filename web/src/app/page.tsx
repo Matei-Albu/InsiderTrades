@@ -52,9 +52,13 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       }),
     ]);
 
+  const activeClusters = clusters.filter((c) => c.is_active);
   const clusterTickers = new Set(
-    clusters.map((c) => c.ticker).filter((t): t is string => !!t),
+    activeClusters.map((c) => c.ticker).filter((t): t is string => !!t),
   );
+  const topCluster =
+    activeClusters.toSorted((a, b) => (b.total_value ?? 0) - (a.total_value ?? 0))[0] ??
+    clusters[0];
 
   const tape: TapeItem[] = [
     ...[...buys, ...sells]
@@ -106,7 +110,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         <TrackerModules
           congress={congress}
           politicians={politicians}
-          topCluster={clusters[0]}
+          topCluster={topCluster}
         />
         <LatestFilings
           trades={buys.slice(0, 6)}

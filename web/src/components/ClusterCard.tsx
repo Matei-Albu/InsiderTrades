@@ -49,15 +49,25 @@ export default function ClusterCard({
         <div className="flex min-w-0 items-center gap-4">
           <TickerLogo symbol={cluster.ticker} name={cluster.company_name} size="lg" />
           <div className="flex min-w-0 flex-col gap-0.5">
-            <h3 className="font-mono text-xl font-semibold">
-              {cluster.ticker ? (
-                <Link href={`/stocks/${cluster.ticker}`} className="hover:underline">
-                  {cluster.ticker}
-                </Link>
-              ) : (
-                "—"
+            <div className="flex items-center gap-2">
+              <h3 className="font-mono text-xl font-semibold">
+                {cluster.ticker ? (
+                  <Link href={`/stocks/${cluster.ticker}`} className="hover:underline">
+                    {cluster.ticker}
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </h3>
+              {cluster.is_active && (
+                <span
+                  title="Latest buy in this cluster was within the last 14 days"
+                  className="rounded-sm bg-buy-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-buy"
+                >
+                  Active
+                </span>
               )}
-            </h3>
+            </div>
             <p className="truncate text-sm text-muted-foreground">{cluster.company_name}</p>
           </div>
         </div>

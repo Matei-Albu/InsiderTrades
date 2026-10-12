@@ -197,7 +197,12 @@ async function ClusterModule({ cluster }: { cluster: ClusterBuy | undefined }) {
     ).catch(() => [] as InsiderTrade[]);
     const seen = new Set<string>();
     for (const t of buys) {
-      if (t.transaction_date && t.transaction_date < cluster.first_buy) continue;
+      if (
+        !t.transaction_date ||
+        t.transaction_date < cluster.first_buy ||
+        t.transaction_date > cluster.last_buy
+      )
+        continue;
       if (seen.has(t.insider_cik)) continue;
       seen.add(t.insider_cik);
       people.push(t);
@@ -207,7 +212,14 @@ async function ClusterModule({ cluster }: { cluster: ClusterBuy | undefined }) {
 
   return (
     <Link href="/clusters" className={CARD}>
-      <CardHeading title="Cluster buys" subtitle="2+ insiders, same stock, 14 days" />
+      <CardHeading
+        title="Cluster buys"
+        subtitle={
+          cluster && !cluster.is_active
+            ? `Latest cluster · ${formatDate(cluster.last_buy)}`
+            : "2+ insiders, same stock, within 14 days"
+        }
+      />
       {cluster ? (
         <>
           <div className="flex items-center gap-4">
@@ -235,7 +247,7 @@ async function ClusterModule({ cluster }: { cluster: ClusterBuy | undefined }) {
         </>
       ) : (
         <p className="border-t pt-4 text-sm text-muted-foreground">
-          No active clusters right now. Check back after the next ingest run.
+          No clusters yet. Check back after the next ingest run.
         </p>
       )}
     </Link>

@@ -75,49 +75,64 @@ export async function getClusterBuys(): Promise<ClusterBuy[]> {
   const { data, error } = await supabase
     .from("cluster_buys")
     .select("*")
+    .order("last_buy", { ascending: false })
     .order("total_value", { ascending: false });
   if (error) throw new Error(`cluster_buys: ${error.message}`);
   return data ?? [];
 }
 
+export function clusterKey(c: Pick<ClusterBuy, "company_cik" | "first_buy">): string {
+  return `${c.company_cik}:${c.first_buy}`;
+}
+
 /**
- * The open-market buys behind each current cluster, grouped by ticker, so cards
- * can list which insiders bought. Only buys inside that cluster's own window.
+ * The open-market buys behind each cluster, keyed by clusterKey(), so cards can
+ * list which insiders bought. Only buys inside that cluster's own date range.
  */
 export async function getClusterInsiders(
   clusters: ClusterBuy[],
 ): Promise<Map<string, InsiderTrade[]>> {
-  const byTicker = new Map<string, InsiderTrade[]>();
-  const live = clusters.filter((c): c is ClusterBuy & { ticker: string } => !!c.ticker);
-  if (live.length === 0) return byTicker;
+  const byCluster = new Map<string, InsiderTrade[]>();
+  if (clusters.length === 0) return byCluster;
 
-  const since = live.map((c) => c.first_buy).sort()[0];
+  const since = clusters.map((c) => c.first_buy).sort()[0];
+  const until = clusters.map((c) => c.last_buy).sort().at(-1)!;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("insider_trades")
     .select("*")
-    .in("ticker", live.map((c) => c.ticker))
+    .in("company_cik", [...new Set(clusters.map((c) => c.company_cik))])
     .eq("transaction_code", "P")
     .gte("transaction_date", since)
+    .lte("transaction_date", until)
     .order("total_value", { ascending: false })
     .limit(1000);
   if (error) throw new Error(`insider_trades: ${error.message}`);
 
-  const windowStart = new Map(live.map((c) => [c.ticker, c.first_buy]));
   for (const t of data ?? []) {
-    if (!t.ticker || !t.transaction_date) continue;
-    if (t.transaction_date < (windowStart.get(t.ticker) ?? "")) continue;
-    const list = byTicker.get(t.ticker) ?? [];
+    if (!t.transaction_date) continue;
+    const date = t.transaction_date;
+    const cluster = clusters.find(
+      (c) => c.company_cik === t.company_cik && c.first_buy <= date && date <= c.last_buy,
+    );
+    if (!cluster) continue;
+    const key = clusterKey(cluster);
+    const list = byCluster.get(key) ?? [];
     list.push(t);
-    byTicker.set(t.ticker, list);
+    byCluster.set(key, list);
   }
-  return byTicker;
+  return byCluster;
 }
 
-/** Tickers currently in a cluster-buy window, for feed badges. */
+/** Tickers with an active (recent) cluster, for feed badges. */
 export async function getClusterTickers(): Promise<Set<string>> {
   const clusters = await getClusterBuys();
-  return new Set(clusters.map((c) => c.ticker).filter((t): t is string => !!t));
+  return new Set(
+    clusters
+      .filter((c) => c.is_active)
+      .map((c) => c.ticker)
+      .filter((t): t is string => !!t),
+  );
 }
 
 export async function getInstitutions(): Promise<Institution[]> {
