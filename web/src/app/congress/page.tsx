@@ -202,7 +202,18 @@ export default async function CongressPage({ searchParams }: PageProps<"/congres
                             >
                               {t.politician_name}
                             </Link>
-                            <PartyTag party={t.party} state={t.state} />
+                            {t.party && (
+                              <span
+                                className={cn(
+                                  "font-mono text-xs",
+                                  t.party === "D" && "text-primary",
+                                  t.party === "R" && "text-sell",
+                                  t.party !== "D" && t.party !== "R" && "text-muted-foreground",
+                                )}
+                              >
+                                {t.state ? `${t.party}-${t.state}` : t.party}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
