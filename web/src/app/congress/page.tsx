@@ -1,13 +1,15 @@
+import { Clock } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import CongressTradeCard from "@/components/CongressTradeCard";
-import { PartyTag, PersonAvatar } from "@/components/media";
+import { PartyTag, PersonAvatar, TickerLogo, TradeTypeTag } from "@/components/media";
 import PageHeader from "@/components/PageHeader";
 import ResultsLimit, {
   DEFAULT_RESULT_LIMIT,
   parseResultLimit,
 } from "@/components/ResultsLimit";
 import SegmentedLinks from "@/components/SegmentedLinks";
+import WatchButton from "@/components/WatchButton";
+import { formatDate } from "@/lib/format";
 import {
   getCongressActivity,
   getCongressTrades,
@@ -43,6 +45,14 @@ function filterHref({ side, member, party, limit }: Filters) {
   if (limit !== DEFAULT_RESULT_LIMIT) params.set("limit", String(limit));
   const qs = params.toString();
   return qs ? `/congress?${qs}` : "/congress";
+}
+
+const LATE_AFTER_DAYS = 30;
+
+function lagDays(traded: string | null, filed: string): number | null {
+  if (!traded) return null;
+  const ms = new Date(filed).getTime() - new Date(traded).getTime();
+  return Number.isNaN(ms) ? null : Math.max(0, Math.round(ms / 86_400_000));
 }
 
 function first(v: string | string[] | undefined) {
@@ -159,22 +169,119 @@ export default async function CongressPage({ searchParams }: PageProps<"/congres
             </div>
           </div>
 
-          {trades.length > 0 ? (
-            <ul className="grid gap-3 md:grid-cols-2">
-              {trades.map((t) => (
-                <CongressTradeCard
-                  key={t.id}
-                  trade={t}
-                  watching={!!t.ticker && watched.has(t.ticker)}
-                  signedIn={!!user}
-                />
-              ))}
-            </ul>
-          ) : (
-            <p className="rounded-lg border bg-card px-5 py-12 text-center text-sm text-muted-foreground">
-              No disclosures match these filters.
-            </p>
-          )}
+          <div className="overflow-x-auto rounded-lg border bg-card">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead className="border-b bg-secondary/60 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-5 py-2.5 text-left font-medium">Member</th>
+                  <th scope="col" className="px-5 py-2.5 text-left font-medium">Stock</th>
+                  <th scope="col" className="px-5 py-2.5 text-left font-medium">Type</th>
+                  <th scope="col" className="px-5 py-2.5 text-right font-medium">Amount</th>
+                  <th scope="col" className="px-5 py-2.5 text-right font-medium">Traded · Disclosed</th>
+                  <th scope="col" className="w-12 px-3 py-2.5">
+                    <span className="sr-only">Watch</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {trades.map((t) => {
+                  const lag = lagDays(t.transaction_date, t.filed_at);
+                  const late = lag != null && lag > LATE_AFTER_DAYS;
+                  const isBuy = t.transaction_type === "purchase";
+                  const isSell = t.transaction_type === "sale";
+                  return (
+                    <tr key={t.id}>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <PersonAvatar name={t.politician_name} size="sm" />
+                          <div className="flex min-w-0 flex-col gap-0.5">
+                            <Link
+                              href={filterHref({ ...current, member: t.politician_slug })}
+                              scroll={false}
+                              className="font-medium hover:underline"
+                            >
+                              {t.politician_name}
+                            </Link>
+                            <PartyTag party={t.party} state={t.state} />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <TickerLogo symbol={t.ticker} name={t.asset_name} size="sm" />
+                          <div className="flex min-w-0 flex-col">
+                            {t.ticker ? (
+                              <Link
+                                href={`/stocks/${t.ticker}`}
+                                className="font-mono font-semibold hover:underline"
+                              >
+                                {t.ticker}
+                              </Link>
+                            ) : (
+                              <span className="font-mono font-semibold text-muted-foreground">—</span>
+                            )}
+                            <span className="max-w-[220px] truncate text-xs text-muted-foreground">
+                              {t.asset_name}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {isBuy || isSell ? (
+                          <TradeTypeTag code={isBuy ? "P" : "S"} />
+                        ) : (
+                          <span className="rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {t.transaction_type}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-mono font-semibold tabular-nums">
+                        {t.amount_range ?? "—"}
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                        {formatDate(t.transaction_date)} ·{" "}
+                        <a
+                          href={t.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="View PTR PDF on House Clerk site"
+                          className="hover:text-foreground hover:underline"
+                        >
+                          {formatDate(t.filed_at)}
+                        </a>
+                        {lag != null && (
+                          <span
+                            className={cn(
+                              "mt-0.5 flex items-center justify-end gap-1",
+                              late && "font-semibold text-sell",
+                            )}
+                          >
+                            <Clock className="size-3.5" aria-hidden="true" />
+                            {lag}d lag
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3.5">
+                        {t.ticker && (
+                          <WatchButton
+                            variant="icon"
+                            ticker={t.ticker}
+                            initialWatching={watched.has(t.ticker)}
+                            signedIn={!!user}
+                          />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {trades.length === 0 && (
+              <p className="px-5 py-12 text-center text-sm text-muted-foreground">
+                No disclosures match these filters.
+              </p>
+            )}
+          </div>
 
           <ResultsLimit
             current={limit}

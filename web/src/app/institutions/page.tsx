@@ -69,24 +69,24 @@ export default async function InstitutionsPage({
           <h2 id="funds-heading" className="text-lg font-semibold">
             Tracked managers
           </h2>
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {institutions.map((inst) => {
               const latest = latestByCik.get(inst.cik);
               return (
                 <li key={inst.cik}>
                   <Link
                     href={`/institutions/${inst.slug}`}
-                    className="flex w-full items-center gap-4 rounded-lg border bg-card p-4 text-left transition-colors hover:border-primary/50"
+                    className="flex h-full w-full flex-col items-center gap-3 rounded-lg border bg-card px-3 py-5 text-center transition-colors hover:border-primary/50"
                   >
-                    <TickerLogo symbol={null} name={inst.name} size="lg" />
-                    <span className="flex min-w-0 flex-col gap-0.5">
-                      <span className="truncate font-semibold">{inst.name}</span>
+                    <TickerLogo symbol={null} name={inst.name} size="xl" />
+                    <span className="flex min-w-0 flex-col items-center gap-1">
+                      <span className="line-clamp-2 text-sm font-semibold">{inst.name}</span>
                       {inst.manager && (
-                        <span className="truncate text-xs text-muted-foreground">
+                        <span className="line-clamp-1 text-xs text-muted-foreground">
                           {inst.manager}
                         </span>
                       )}
-                      <span className="font-mono text-xs">
+                      <span className="font-mono text-xs text-muted-foreground">
                         {latest
                           ? `${formatMoney(latest.total_value)} · ${formatDate(latest.period_of_report)}`
                           : "not ingested yet"}
