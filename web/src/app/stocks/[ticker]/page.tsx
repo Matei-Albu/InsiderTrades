@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import CompanyAbout from "@/components/CompanyAbout";
-import { TickerLogo } from "@/components/media";
+import { InstitutionLogo } from "@/components/media";
 import PageHeader from "@/components/PageHeader";
 import StockChartPanel from "@/components/StockChartPanel";
 import TradesList from "@/components/TradesList";
@@ -111,7 +111,7 @@ export default async function StockPage({
                     href={`/institutions/${o.institution.slug}`}
                     className="flex items-center gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/50"
                   >
-                    <TickerLogo symbol={null} name={o.institution.name} size="md" />
+                    <InstitutionLogo slug={o.institution.slug} name={o.institution.name} size="md" />
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate text-sm font-semibold">
                         {o.institution.name}

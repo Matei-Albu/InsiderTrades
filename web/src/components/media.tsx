@@ -1,6 +1,8 @@
 import Image from "next/image";
+import FallbackImage from "@/components/FallbackImage";
 import { cn } from "@/lib/utils";
 import { codeLabel } from "@/lib/format";
+import { institutionLogo, stockLogo } from "@/lib/photos";
 
 const sizes = {
   sm: "size-8",
@@ -11,7 +13,7 @@ const sizes = {
 
 type Size = keyof typeof sizes;
 
-/** Brand logos we ship in /public/logos. Anything else gets a monogram. */
+/** Brand logos we ship in /public/logos. Anything else tries a remote logo, then a monogram. */
 const LOGOS: Record<string, string> = {
   AAPL: "apple",
   AMD: "amd",
@@ -47,6 +49,11 @@ export function TickerLogo({
   className?: string;
 }) {
   const logo = symbol ? LOGOS[symbol.toUpperCase()] : undefined;
+  const monogram = (
+    <span aria-hidden="true" className="font-mono text-[11px] font-semibold text-primary">
+      {(symbol ?? name).slice(0, 2).toUpperCase()}
+    </span>
+  );
   return (
     <span
       className={cn(
@@ -64,12 +71,53 @@ export function TickerLogo({
           unoptimized
           className="size-full object-contain"
         />
+      ) : symbol ? (
+        <FallbackImage
+          src={stockLogo(symbol)}
+          alt={`${name} logo`}
+          className="size-full object-contain"
+          fallback={monogram}
+        />
       ) : (
-        <span
-          aria-hidden="true"
-          className="font-mono text-[11px] font-semibold text-primary"
-        >
-          {(symbol ?? name).slice(0, 2).toUpperCase()}
+        monogram
+      )}
+    </span>
+  );
+}
+
+export function InstitutionLogo({
+  slug,
+  name,
+  size = "md",
+  className,
+}: {
+  slug: string | null;
+  name: string;
+  size?: Size;
+  className?: string;
+}) {
+  const logo = institutionLogo(slug);
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-md border p-1.5",
+        logo ? "bg-white" : "bg-card",
+        sizes[size],
+        className,
+      )}
+    >
+      {logo ? (
+        <Image
+          src={logo}
+          alt={`${name} logo`}
+          width={80}
+          height={80}
+          unoptimized
+          className="size-full object-contain"
+        />
+      ) : (
+        <span aria-hidden="true" className="font-mono text-[11px] font-semibold text-primary">
+          {name.slice(0, 2).toUpperCase()}
         </span>
       )}
     </span>
@@ -78,10 +126,12 @@ export function TickerLogo({
 
 export function PersonAvatar({
   name,
+  src,
   size = "md",
   className,
 }: {
   name: string;
+  src?: string | null;
   size?: Size;
   className?: string;
 }) {
@@ -100,7 +150,16 @@ export function PersonAvatar({
         className,
       )}
     >
-      <span aria-hidden="true">{initials}</span>
+      {src ? (
+        <FallbackImage
+          src={src}
+          alt=""
+          className="size-full object-cover object-top"
+          fallback={<span aria-hidden="true">{initials}</span>}
+        />
+      ) : (
+        <span aria-hidden="true">{initials}</span>
+      )}
       <span className="sr-only">{name}</span>
     </span>
   );

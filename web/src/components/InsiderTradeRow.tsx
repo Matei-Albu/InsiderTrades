@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { InsiderTrade } from "@/lib/types";
 import { formatDate, formatMoney, formatPrice, formatShares } from "@/lib/format";
-import { PersonAvatar, TickerLogo, TradeTypeTag } from "@/components/media";
+import { TickerLogo, TradeTypeTag } from "@/components/media";
 import WatchButton from "@/components/WatchButton";
 import { cn } from "@/lib/utils";
 
@@ -71,19 +71,20 @@ export default function InsiderTradeRow({
         </div>
       </div>
 
-      <div className="col-span-2 row-start-2 flex min-w-0 items-center gap-3 md:col-span-1 md:row-start-auto">
-        <PersonAvatar name={trade.insider_name} size="sm" />
+      <div className="col-span-2 row-start-2 flex min-w-0 items-center md:col-span-1 md:row-start-auto">
         <div className="flex min-w-0 flex-col">
-          <span className="truncate text-sm font-medium">{trade.insider_name}</span>
-          {role && (
-            <span
-              className={cn(
-                "truncate text-xs",
-                role.emphasised ? "font-medium text-primary" : "text-muted-foreground",
-              )}
-            >
-              {role.text}
-            </span>
+          {role ? (
+            <>
+              <span
+                title={role.text}
+                className={cn("truncate text-sm font-medium", role.emphasised && "text-primary")}
+              >
+                {role.text}
+              </span>
+              <span className="truncate text-xs text-muted-foreground">{trade.insider_name}</span>
+            </>
+          ) : (
+            <span className="truncate text-sm font-medium">{trade.insider_name}</span>
           )}
         </div>
       </div>

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { ArrowRight } from "lucide-react";
 import InsiderTradeRow, { insiderRole } from "@/components/InsiderTradeRow";
 import {
+  InstitutionLogo,
   PartyTag,
   PersonAvatar,
   TickerLogo,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/queries";
 import type { ClusterBuy, CongressTrade, InsiderTrade, Politician } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { politicianPhoto } from "@/lib/photos";
 
 /* ------------------------------------------------------------------ hero */
 
@@ -154,7 +156,7 @@ function CongressCard({
       <CardHeading title="Congress trades" subtitle="House STOCK Act disclosures" />
       <div className="flex -space-x-3">
         {politicians.slice(0, 4).map((p) => (
-          <PersonAvatar key={p.id} name={p.name} size="lg" />
+          <PersonAvatar key={p.id} name={p.name} src={politicianPhoto(p.slug)} size="lg" />
         ))}
       </div>
       <ul className="flex flex-col gap-2.5 border-t pt-4">
@@ -267,7 +269,7 @@ async function InstitutionsModule() {
       <CardHeading title="Institution trades" subtitle="Quarterly 13F position changes" />
       <div className="flex gap-2">
         {institutions.slice(0, 4).map((i) => (
-          <TickerLogo key={i.cik} symbol={null} name={i.name} size="md" />
+          <InstitutionLogo key={i.cik} slug={i.slug} name={i.name} size="md" />
         ))}
       </div>
       <ul className="flex flex-col gap-2.5 border-t pt-4">

@@ -18,6 +18,7 @@ import {
   type CongressFilter,
 } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { politicianPhoto } from "@/lib/photos";
 
 export const dynamic = "force-dynamic";
 
@@ -124,7 +125,7 @@ export default async function CongressPage({ searchParams }: PageProps<"/congres
                       selected && "border-primary ring-1 ring-primary",
                     )}
                   >
-                    <PersonAvatar name={m.name} size="xl" />
+                    <PersonAvatar name={m.name} src={politicianPhoto(m.slug)} size="xl" />
                     <span className="flex flex-col items-center gap-1">
                       <span className="text-sm font-semibold">{m.name}</span>
                       <span className="flex items-center gap-1.5">
@@ -193,7 +194,7 @@ export default async function CongressPage({ searchParams }: PageProps<"/congres
                     <tr key={t.id}>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <PersonAvatar name={t.politician_name} size="sm" />
+                          <PersonAvatar name={t.politician_name} src={politicianPhoto(t.politician_slug)} size="sm" />
                           <div className="flex min-w-0 flex-col gap-0.5">
                             <Link
                               href={filterHref({ ...current, member: t.politician_slug })}

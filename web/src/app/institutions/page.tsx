@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { HoldingChangeTag, TickerLogo } from "@/components/media";
+import { HoldingChangeTag, InstitutionLogo, TickerLogo } from "@/components/media";
 import PageHeader from "@/components/PageHeader";
 import SegmentedLinks from "@/components/SegmentedLinks";
 import WatchButton from "@/components/WatchButton";
@@ -78,7 +78,7 @@ export default async function InstitutionsPage({
                     href={`/institutions/${inst.slug}`}
                     className="flex h-full w-full flex-col items-center gap-3 rounded-lg border bg-card px-3 py-5 text-center transition-colors hover:border-primary/50"
                   >
-                    <TickerLogo symbol={null} name={inst.name} size="xl" />
+                    <InstitutionLogo slug={inst.slug} name={inst.name} size="xl" />
                     <span className="flex min-w-0 flex-col items-center gap-1">
                       <span className="line-clamp-2 text-sm font-semibold">{inst.name}</span>
                       {inst.manager && (
@@ -136,7 +136,7 @@ export default async function InstitutionsPage({
                     <tr key={`${m.institution_cik}-${m.cusip}-${m.period_of_report}`}>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <TickerLogo symbol={null} name={m.institution_name} size="sm" />
+                          <InstitutionLogo slug={m.institution_slug} name={m.institution_name} size="sm" />
                           {m.institution_slug ? (
                             <Link
                               href={`/institutions/${m.institution_slug}`}
